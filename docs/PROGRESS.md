@@ -3,9 +3,9 @@
 Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 ## M0 Setup
-- [ ] Tool installs (Docker Desktop, maven, uv, gh, pnpm, Python 3.12)
-- [ ] Git init and GitHub repo
-- [ ] S1 Repo skeleton and tooling (5 h)
+- [x] Tool installs (Docker Desktop, maven, uv, gh, pnpm, Python 3.12)
+- [x] Git init and GitHub repo (public: github.com/rj8228/prayog)
+- [x] S1 Repo skeleton and tooling (5 h)
 
 ## M1 First module
 - [ ] S3 Contracts and domain types (5 h)
