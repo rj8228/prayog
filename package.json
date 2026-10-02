@@ -1,0 +1,8 @@
+{
+  "name": "prayog-web-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22"
+  }
+}

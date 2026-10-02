@@ -1,0 +1,33 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+target/
+generated/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Web
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime data
+data/
+
+# jqwik local failure database
+.jqwik-database

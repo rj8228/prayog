@@ -1,0 +1,31 @@
+# uv workspace root (not a package). Members: the bot SDK and the simulated traders.
+[project]
+name = "prayog-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["prayog-sdk", "prayog-agents"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["sdk/python", "services/agents"]
+
+[tool.uv.sources]
+prayog-sdk = { workspace = true }
+prayog-agents = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["sdk/python/tests", "services/agents/tests"]
+addopts = "--import-mode=importlib"

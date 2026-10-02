@@ -257,7 +257,7 @@ Confirmed by Raj before M0. These override earlier sections where they differ.
 | # | Item | Decision |
 |---|---|---|
 | 1 | Java | 21 LTS (Temurin in CI and images) |
-| 2 | Spring Boot | 4.x, latest patch (Spring Framework 7, Jakarta EE 11, Jackson 3 `tools.jackson`, modular starters such as `spring-boot-starter-flyway`, `-jooq`, `-kafka`). Exact versions of jOOQ, Flyway, Testcontainers, jqwik and JUnit are verified for compatibility in M0 and recorded here |
+| 2 | Spring Boot | 4.x (Spring Framework 7, Jakarta EE 11, Jackson 3 `tools.jackson`, modular starters such as `spring-boot-starter-flyway`, `-jooq`, `-kafka`). Pinned versions are in section 16.5 |
 | 3 | Build | Maven 3.9 + Maven Wrapper (`./mvnw`). The root `pom.xml` is both parent and aggregator, with `dependencyManagement` and `pluginManagement` |
 | 4 | Maven modules | `contracts` (JSON Schemas + Java event records), `services/exchange/exchange-core` (plain Java engine, no Spring), `services/exchange/exchange-app` (Spring Boot), `services/exchange/exchange-bench` (JMH), `services/post-trade` |
 | 5 | Java package / groupId | `dev.prayog` |
@@ -265,7 +265,7 @@ Confirmed by Raj before M0. These override earlier sections where they differ.
 | 7 | Logging | Spring Boot structured logging (JSON to stdout) |
 | 8 | Java tests | JUnit + jqwik + AssertJ; unit tests via Surefire run without Docker; integration tests (`*IT`) via Failsafe use Testcontainers |
 | 9 | Flyway | Migrations in `services/post-trade/src/main/resources/db/migration`; Spring auto-migrate off; one-off `flyway/flyway` job in Compose |
-| 10 | jOOQ | 3.20.x OSS; code generated at build time by `testcontainers-jooq-codegen-maven-plugin` from a Flyway-migrated Testcontainers PostgreSQL; generated code not committed (build needs Docker) |
+| 10 | jOOQ | 3.21.x OSS (managed by Spring Boot); code generated at build time by `testcontainers-jooq-codegen-maven-plugin` from a Flyway-migrated Testcontainers PostgreSQL; generated code not committed (build needs Docker) |
 | 11 | Disruptor | 4.x; ring size 65,536; `ProducerType.MULTI`; wait strategy set by env var (default `BLOCKING`; `BUSY_SPIN`/`YIELDING` for benchmarks) |
 | 12 | Shards | 1 shard (all symbols on one matching thread) for the MVP |
 | 13 | Sequencing | Input sequence and event sequence assigned on the matching thread |
@@ -286,7 +286,7 @@ Confirmed by Raj before M0. These override earlier sections where they differ.
 | 28 | Compose | `deploy/compose/compose.yaml`; profiles `infra`, `app`, `obs`; health checks + `depends_on` conditions |
 | 29 | Container images | Multi-stage; `eclipse-temurin:21-jre` runtime; non-root; `-XX:MaxRAMPercentage=75`; multi-arch through `docker buildx` (registry push deferred until hosting is decided) |
 | 30 | Python | 3.12 (`.python-version`, installed by uv); one uv workspace at the root with `sdk/python` (`prayog_sdk`) and `services/agents`; Ruff, pytest, pytest-asyncio, httpx + websockets, pydantic, numpy |
-| 31 | Web | Node 22 LTS; pnpm 10 through corepack; `pnpm-workspace.yaml` at the root; React 19, TypeScript strict, Vite, Redux Toolkit + RTK Query, react-router 7, `oidc-client-ts`, TradingView Lightweight Charts (attribution link required), ESLint, Prettier, Vitest, Testing Library |
+| 31 | Web | Node 22 LTS; pnpm 10 through corepack; `pnpm-workspace.yaml` at the root; React 19, TypeScript 6 strict, Vite 8, Redux Toolkit + RTK Query, react-router 7, `oidc-client-ts`, TradingView Lightweight Charts (attribution link required), ESLint (replaces the oxlint that the Vite template now ships), Prettier, Vitest + jsdom, Testing Library |
 | 32 | Makefile | `up`, `down`, `test`, `fmt`, `lint`, `build`, `logs`, `clean`, `help`; `bench` and `replay-check` added in S8/S9 |
 | 33 | `make test` | `./mvnw -B verify`, `uv run pytest`, `pnpm -r test` |
 | 34 | CI | GitHub Actions `ci.yml` on push and PR; parallel jobs: java (`./mvnw -B verify`), python (ruff check, ruff format --check, pytest), web (install with frozen lockfile, lint, typecheck, test, build) |
@@ -315,3 +315,28 @@ Work proceeds by milestone. Sessions keep their section 10 definitions.
 | **M2 Engine complete** | **S5, S6, S7, S8** | All matching rules tested; Disruptor pipeline; replay checksum test passes in CI |
 | **M3 Runnable app** | **S2, S10, S11, S12, S13, S15, S16, S17, S18, S19** | `make up`; sign in at `app.prayog.localhost`; trade by hand; the sample bot trades; P&L and leaderboard update |
 | **M4 Hardening layers** | **S9, S14, S20, S21, S22** + multi-arch images + Phase 2 items (e.g. agent rate-limit tier) | MVP definition of done (section 11) met |
+
+### 16.5 Pinned versions (verified in M0, 3 Oct 2026)
+
+| Component | Version | Note |
+|---|---|---|
+| Spring Boot | 4.1.1 | Latest stable 4.x; parent POM `spring-boot-starter-parent` |
+| Maven (wrapper) | 3.9.16 | `./mvnw`; wrapper 3.3.4 |
+| JUnit Jupiter | 6.0.3 | Managed by Spring Boot |
+| jqwik | 1.10.1 | Runs on JUnit Platform 6 (verified by `ToolchainSmokeTest`) |
+| AssertJ | 3.27.7 | Managed by Spring Boot |
+| jOOQ | 3.21.7 | Managed by Spring Boot |
+| Flyway | 12.4.0 | Managed by Spring Boot |
+| Testcontainers | 2.0.5 | Managed by Spring Boot |
+| Kafka client / spring-kafka | 4.2.1 / 4.1.1 | Managed by Spring Boot |
+| Jackson | 3.1.5 | Managed by Spring Boot |
+| LMAX Disruptor | 4.0.0 | |
+| JMH | 1.37 | |
+| HdrHistogram | 2.2.2 | |
+| networknt json-schema-validator | 3.0.8 | |
+| Spotless / palantir-java-format | 3.10.3 / 2.101.0 | |
+| Python | 3.12.15 | uv 0.12 |
+| Node / pnpm | 22 / 10.34.6 | |
+| React / TypeScript / Vite / Vitest | 19.2 / 6.0 / 8.3 / 5.0 | |
+
+**Risk for S16:** `testcontainers-jooq-codegen-maven-plugin` was last released in April 2024 (0.0.4) and targets Testcontainers 1.x. If it fails with Testcontainers 2 and Flyway 12, the fallback is jOOQ's `DDLDatabase` (generates from the Flyway SQL files without a database) or a small Testcontainers-driven codegen step. Decide in S16 and record an ADR.
