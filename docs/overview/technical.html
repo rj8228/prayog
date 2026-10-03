@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prayog Technical Overview</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #5f5e5a; --line: #e3e1db; --card: #ffffff;
+    --accent: #2f5d8a; --code-bg: #f2f0eb; --mvp: #2e7d4f; --p2: #9a6b00; --later: #6f6f6f;
+    --hot: #b3402e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+      --accent: #8bb4dc; --code-bg: #22231f; --mvp: #6fcf97; --p2: #e0b04a; --later: #a0a0a0;
+      --hot: #ef8a75;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+    --accent: #8bb4dc; --code-bg: #22231f; --mvp: #6fcf97; --p2: #e0b04a; --later: #a0a0a0;
+    --hot: #ef8a75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+  nav { position: sticky; top: 24px; align-self: start; font-size: 14px; max-height: calc(100vh - 48px); overflow: auto; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .sub { padding-left: 12px; font-size: 13px; }
+  main { min-width: 0; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 24px; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 19px; margin: 36px 0 8px; }
+  h4 { font-size: 15px; margin: 18px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  p, li { max-width: 74ch; }
+  .lede { color: var(--muted); font-size: 18px; }
+  a { color: var(--accent); }
+  code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  pre code { padding: 0; background: none; }
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; border: 1.5px solid; white-space: nowrap; vertical-align: middle; }
+  .mvp { color: var(--mvp); } .p2 { color: var(--p2); } .later { color: var(--later); }
+  .lib { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--p2); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .lib > strong:first-child { display: block; margin-bottom: 4px; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 14px; background: var(--card); margin: 16px 0; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps > li { counter-increment: s; position: relative; padding: 10px 12px 10px 48px; border-bottom: 1px solid var(--line); max-width: none; }
+  .steps > li::before { content: counter(s); position: absolute; left: 8px; top: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--bg); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .hot { color: var(--hot); font-weight: 600; }
+  svg { max-width: 100%; height: auto; display: block; margin: 12px 0; }
+  svg text { fill: var(--fg); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  svg .muted { fill: var(--muted); }
+  svg .small { font-size: 10.5px; }
+  svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  svg .group { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  svg .hotbox { fill: var(--card); stroke: var(--hot); stroke-width: 2; }
+  svg .line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  svg .hotline { stroke: var(--hot); stroke-width: 2; fill: none; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav { position: static; max-height: none; border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <strong>Contents</strong>
+  <a href="#read">How to read this</a>
+  <a href="#arch">1. Architecture</a>
+  <a href="#principles">2. Principles and why</a>
+  <a href="#path">3. The order path, step by step</a>
+  <a href="#features">4. Feature → mechanism map</a>
+  <a href="#components">5. Components</a>
+  <a class="sub" href="#c-gateway">5.1 Gateway</a>
+  <a class="sub" href="#c-seq">5.2 Sequencer pipeline</a>
+  <a class="sub" href="#c-engine">5.3 Matching engine</a>
+  <a class="sub" href="#c-clock">5.4 Sim clock</a>
+  <a class="sub" href="#c-journal">5.5 Journal and replay</a>
+  <a class="sub" href="#c-md">5.6 Market data</a>
+  <a class="sub" href="#c-kafka">5.7 Kafka publisher</a>
+  <a class="sub" href="#c-post">5.8 Post-trade</a>
+  <a class="sub" href="#c-board">5.9 Leaderboard</a>
+  <a class="sub" href="#c-agents">5.10 Agents and SDK</a>
+  <a class="sub" href="#c-web">5.11 Web terminal</a>
+  <a class="sub" href="#c-obs">5.12 Observability</a>
+  <a href="#failures">6. Failure modes</a>
+  <a href="#prod">7. MVP → production</a>
+  <a href="#libs">8. Libraries: use or learn from</a>
+  <a href="#decisions">9. Open technical decisions</a>
+  <a href="#sources">Sources</a>
+</nav>
+<main>
+<h1>Prayog technical overview</h1>
+<p class="lede">How each feature is built, how an order and its consequences flow through the system, and what a production exchange does differently. Read with <a href="functional.html">the functional overview</a>.</p>
+
+<h2 id="read">How to read this</h2>
+<ul>
+  <li>Tags match the functional page: <span class="tag mvp">MVP</span> <span class="tag p2">PHASE 2</span> <span class="tag later">LATER</span>.</li>
+  <li><span class="hot">Hot path</span> means code that runs for every order on the matching thread. It has the strictest rules: no I/O, no locks, no system clock, as little allocation as possible.</li>
+  <li><strong>Build vs. library boxes.</strong> We write our own code to learn. Each component has a box showing what using an open-source library would look like, its licence, and why we did or did not use it. Licences were checked on GitHub on 3 Oct 2026.</li>
+  <li>Exact decisions live in <code>docs/BUILD_PLAN.md</code> section 16 and <code>docs/adr/</code>. This page explains them; it does not override them.</li>
+</ul>
+
+<h2 id="arch">1. Architecture</h2>
+<svg viewBox="0 0 920 560" role="img" aria-label="Architecture: browsers, bots and agents connect through Traefik to the exchange process. Inside it the gateway feeds a Disruptor ring, a single matching thread, and handlers for the journal, market data and the Kafka publisher. Kafka feeds the post-trade service, which writes PostgreSQL and Redis. Keycloak issues tokens.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--hot)"/></marker></defs>
+  <rect class="box" x="40" y="20" width="160" height="44" rx="8"/><text x="120" y="40" text-anchor="middle">Web terminal</text><text x="120" y="55" text-anchor="middle" class="muted small">React · browser</text>
+  <rect class="box" x="230" y="20" width="160" height="44" rx="8"/><text x="310" y="40" text-anchor="middle">User bots</text><text x="310" y="55" text-anchor="middle" class="muted small">Python SDK</text>
+  <rect class="box" x="420" y="20" width="160" height="44" rx="8"/><text x="500" y="40" text-anchor="middle">Simulated traders</text><text x="500" y="55" text-anchor="middle" class="muted small">services/agents</text>
+  <rect class="box" x="720" y="20" width="160" height="44" rx="8"/><text x="800" y="40" text-anchor="middle">Keycloak</text><text x="800" y="55" text-anchor="middle" class="muted small">tokens (JWT)</text>
+  <rect class="box" x="40" y="96" width="540" height="34" rx="8"/><text x="310" y="118" text-anchor="middle">Traefik  ·  app. / api. / auth. .prayog.localhost</text>
+  <path class="line" d="M120,64 V96 M310,64 V96 M500,64 V96" marker-end="url(#a)"/>
+  <path class="line" d="M720,42 H600 V96" stroke-dasharray="4 3"/>
+  <text x="608" y="88" class="muted small">login / client credentials</text>
+  <rect class="group" x="20" y="150" width="660" height="275" rx="10"/>
+  <text x="32" y="170" class="muted">services/exchange  (one process, one instance)</text>
+  <rect class="box" x="40" y="185" width="140" height="56" rx="8"/><text x="110" y="208" text-anchor="middle">Gateway</text><text x="110" y="225" text-anchor="middle" class="muted small">WebFlux REST + WS</text>
+  <rect class="hotbox" x="220" y="185" width="130" height="56" rx="8"/><text x="285" y="208" text-anchor="middle">Disruptor ring</text><text x="285" y="225" text-anchor="middle" class="muted small">65,536 slots</text>
+  <rect class="hotbox" x="390" y="185" width="150" height="56" rx="8"/><text x="465" y="208" text-anchor="middle">Matching thread</text><text x="465" y="225" text-anchor="middle" class="muted small">exchange-core</text>
+  <path class="hotline" d="M180,213 H220" marker-end="url(#ah)"/><path class="hotline" d="M350,213 H390" marker-end="url(#ah)"/>
+  <path class="line" d="M310,130 V150 M110,150 V185" marker-end="url(#a)"/>
+  <rect class="box" x="40" y="300" width="150" height="56" rx="8"/><text x="115" y="323" text-anchor="middle">Market data</text><text x="115" y="340" text-anchor="middle" class="muted small">book + trades → WS</text>
+  <rect class="box" x="220" y="300" width="150" height="56" rx="8"/><text x="295" y="323" text-anchor="middle">Journal writer</text><text x="295" y="340" text-anchor="middle" class="muted small">inputs + event log</text>
+  <rect class="box" x="400" y="300" width="150" height="56" rx="8"/><text x="475" y="323" text-anchor="middle">Kafka publisher</text><text x="475" y="340" text-anchor="middle" class="muted small">reads event log</text>
+  <path class="line" d="M465,241 V270 H115 V300 M295,270 V300" marker-end="url(#a)"/>
+  <path class="line" d="M370,328 H400" marker-end="url(#a)"/>
+  <rect class="box" x="560" y="372" width="110" height="40" rx="8"/><text x="615" y="396" text-anchor="middle">/data/journal</text>
+  <path class="line" d="M295,356 V392 H560" marker-end="url(#a)"/><path class="line" d="M615,372 V342 H550" marker-end="url(#a)"/><text x="622" y="364" class="muted small">tail</text>
+  <path class="line" d="M40,328 H24 V140 H60 V130" marker-end="url(#a)"/>
+  <text x="30" y="290" class="muted small" transform="rotate(-90 30 290)">push to clients</text>
+  <rect class="box" x="720" y="300" width="160" height="56" rx="8"/><text x="800" y="323" text-anchor="middle">Kafka (KRaft)</text><text x="800" y="340" text-anchor="middle" class="muted small">exchange.events.v1</text>
+  <path class="line" d="M550,314 C 620,314 660,314 720,318" marker-end="url(#a)"/>
+  <rect class="box" x="720" y="410" width="160" height="56" rx="8"/><text x="800" y="433" text-anchor="middle">Post-trade</text><text x="800" y="450" text-anchor="middle" class="muted small">positions · P&amp;L · charges</text>
+  <path class="line" d="M800,356 V410" marker-end="url(#a)"/>
+  <rect class="box" x="560" y="490" width="140" height="50" rx="8"/><text x="630" y="520" text-anchor="middle">PostgreSQL</text>
+  <rect class="box" x="740" y="490" width="140" height="50" rx="8"/><text x="810" y="520" text-anchor="middle">Redis (leaderboard)</text>
+  <path class="line" d="M770,466 L660,490 M810,466 V490" marker-end="url(#a)"/>
+  <rect class="box" x="40" y="450" width="380" height="80" rx="8"/>
+  <text x="56" y="472">Legend</text>
+  <line class="hotline" x1="56" y1="492" x2="90" y2="492"/><text x="98" y="496">hot path: per order, single thread, no I/O</text>
+  <line class="line" x1="56" y1="515" x2="90" y2="515"/><text x="98" y="519">off the order path: may block, retry, lag</text>
+</svg>
+<div class="table-wrap"><table>
+  <tr><th>Deployable</th><th>Tech</th><th>Job</th><th>State it owns</th></tr>
+  <tr><td><code>services/exchange</code></td><td>Java 21, Spring Boot 4 (WebFlux), Disruptor; engine in plain-Java <code>exchange-core</code></td><td>Accept orders, match, publish everything</td><td>Order books in memory; journal files on <code>/data/journal</code></td></tr>
+  <tr><td><code>services/post-trade</code></td><td>Java 21, Spring Boot, spring-kafka, jOOQ, Flyway</td><td>Turn trade events into positions, P&amp;L, charges, leaderboard</td><td>PostgreSQL tables; Redis sorted set</td></tr>
+  <tr><td><code>services/agents</code></td><td>Python 3.12, asyncio</td><td>Simulated traders</td><td>None (seeded random)</td></tr>
+  <tr><td><code>sdk/python</code></td><td>Python, httpx, websockets, pydantic</td><td>Client library for bots</td><td>None</td></tr>
+  <tr><td><code>apps/web</code></td><td>React 19, Redux Toolkit, RTK Query, Lightweight Charts</td><td>Terminal and ops page</td><td>Browser memory only</td></tr>
+  <tr><td><code>contracts</code></td><td>JSON Schema 2020-12 + Java records</td><td>The shared message shapes</td><td>None</td></tr>
+</table></div>
+
+<h2 id="principles">2. Principles, and why each exists</h2>
+<div class="table-wrap"><table>
+  <tr><th>Principle</th><th>Why</th><th>What breaks without it</th></tr>
+  <tr><td><strong>One writer thread owns the books</strong></td><td>No locks in matching. A lock costs time even when nobody else wants it, and contended locks cost far more. One thread also gives one obvious order of events</td><td>Two threads matching the same book need locks or can corrupt it; event order depends on thread timing</td></tr>
+  <tr><td><strong>Integer paise everywhere</strong></td><td>Floating point cannot represent 0.10 exactly; sums drift</td><td>₹0.1 + ₹0.2 ≠ ₹0.3; P&amp;L off by fractions of a paisa that reconcile nowhere</td></tr>
+  <tr><td><strong>Time is an input</strong></td><td>If the engine read the system clock, replaying yesterday would see today's time</td><td>Replays differ; tests depend on wall-clock speed</td></tr>
+  <tr><td><strong>Determinism</strong>: same inputs → byte-identical events</td><td>The input journal then becomes a complete backup: rebuild state by replaying it. It also enables hot standbys later (section 7)</td><td>Crash recovery and bug reproduction become guesswork</td></tr>
+  <tr><td><strong>No network or database on the order path</strong></td><td>A network call takes a millisecond or more on a bad day; matching takes about a microsecond. One slow call would stall every order behind it</td><td>Latency spikes; a database outage stops trading</td></tr>
+  <tr><td><strong>Everything after the trade goes through Kafka</strong></td><td>Post-trade work (P&amp;L, charges, reports) can be slow, can fail and can be replayed, without touching trading</td><td>A slow P&amp;L query slows matching</td></tr>
+  <tr><td><strong>Agents use the public API</strong></td><td>The simulation tests the real system end to end</td><td>Special back doors hide bugs that real users hit</td></tr>
+</table></div>
+
+<h2 id="path">3. The order path, step by step</h2>
+<p>A bot sends <span class="tag">BUY 10 ABC @ ₹100.05</span> and it partly trades. Steps 4–7 are the <span class="hot">hot path</span>.</p>
+<ol class="steps">
+  <li><strong>Client → Traefik → gateway.</strong> HTTPS <code>POST /orders</code> with a JSON body and a bearer token. Traefik routes by hostname. <span class="tag mvp">MVP</span> runs plain HTTP locally.</li>
+  <li><strong>Gateway checks</strong> (on a WebFlux event-loop thread): verify the JWT signature with Keycloak's public key (cached; no network call per request), take a token from the account's rate-limit bucket, check the body against <code>new-order-request.schema.json</code> rules, and turn JSON into a <code>NewOrder</code> command. A failure here returns HTTP 4xx with an RFC 9457 problem body. The engine never sees it.</li>
+  <li><strong>Publish to the ring.</strong> The gateway claims the next slot in the Disruptor ring buffer, copies the command in and publishes it. This is a few atomic operations with no lock. If the ring is full the gateway rejects with 503 ("back-pressure") instead of queueing without limit.</li>
+  <li><span class="hot">Sequence.</span> The matching thread takes the command and gives it the next input sequence number. That number fixes its place in history.</li>
+  <li><span class="hot">Validate.</span> Symbol, quantity, tick, band, session state, account enabled. The first failure gives <code>OrderRejected(reason)</code>.</li>
+  <li><span class="hot">Match.</span> Look at the best ask level. While it crosses the limit, fill against the oldest order there, emit a <code>Trade</code>, and remove filled orders and empty levels. Then rest the remainder at the back of its price queue.</li>
+  <li><span class="hot">Emit events</span> to the event sink, each with the next event sequence number and the sim time: <code>OrderAccepted</code>, then the <code>Trade</code>s.</li>
+  <li><strong>Make durable.</strong> The journal handler appends the input command and its events to files. At the end of each Disruptor batch it calls <code>fsync</code> once, so many orders share one disk flush ("group commit").</li>
+  <li><strong>Respond and publish</strong>, only after step 8: the gateway completes the HTTP response, the market-data handler pushes book changes and trade prints to WebSocket subscribers, and the owner gets private order updates.</li>
+  <li><strong>Kafka publisher</strong> (own thread) reads new records from the event log and sends them to Kafka, keyed by symbol. If Kafka is down it simply falls behind and catches up later; trading never waits for it.</li>
+  <li><strong>Post-trade</strong> (another service) consumes the trades, updates positions, P&amp;L and charges in PostgreSQL inside one transaction per event batch, and updates the leaderboard in Redis.</li>
+</ol>
+<div class="note"><strong>Why "respond only after durable" (step 9 after step 8)?</strong> If we told a client "you bought 10" and then crashed before writing it down, the trade would vanish on restart. Durable first, announce second. LMAX's public architecture write-up describes the same rule. The cost is that latency includes an fsync, which is amortised across a batch. <em>Open decision for S7/S8: confirm this ordering.</em></div>
+
+<h2 id="features">4. Feature → mechanism map</h2>
+<div class="table-wrap"><table>
+  <tr><th>Feature</th><th>Where</th><th>How it works technically</th><th>Session</th></tr>
+  <tr><td>Sign in, API keys</td><td>Keycloak, gateway</td><td>OIDC; web uses Authorization Code + PKCE, bots use client credentials. Gateway is an OAuth2 resource server that validates JWTs locally with cached signing keys</td><td><span class="tag mvp">MVP</span> S2, S10</td></tr>
+  <tr><td>Rate limit</td><td>Gateway</td><td>Token bucket per account in a <code>ConcurrentHashMap</code>. Refill is computed lazily from elapsed time, so no timer thread is needed</td><td><span class="tag mvp">MVP</span> S10</td></tr>
+  <tr><td>Message validation</td><td>Gateway, contracts</td><td>Shapes from JSON Schema; the engine re-checks business rules (tick, band), because only it knows the instrument and session</td><td><span class="tag mvp">MVP</span> S3, S10</td></tr>
+  <tr><td>Limit matching</td><td>exchange-core</td><td>Sorted price levels, FIFO queues, order index (section 5.3)</td><td><span class="tag mvp">MVP</span> S4 ✓</td></tr>
+  <tr><td>Market orders</td><td>exchange-core</td><td>Same loop with the band edge as the limit; remainder → <code>OrderCancelled(NO_LIQUIDITY)</code></td><td><span class="tag mvp">MVP</span> S5</td></tr>
+  <tr><td>Cancel</td><td>exchange-core</td><td>Look up by ID (hash map), unlink from the level's list in O(1), drop the level if empty</td><td><span class="tag mvp">MVP</span> S5</td></tr>
+  <tr><td>Modify</td><td>exchange-core</td><td>Reduce: change quantity in place (keeps the queue position). Increase or reprice: remove and re-add at the back, matching if it now crosses</td><td><span class="tag mvp">MVP</span> S5</td></tr>
+  <tr><td>Price bands</td><td>exchange-core</td><td>Precompute <code>[low, high]</code> per instrument from the reference price; integer compare on validate</td><td><span class="tag mvp">MVP</span> S6</td></tr>
+  <tr><td>Sessions, halt</td><td>exchange-core</td><td>A state field checked on validate; changed only by journaled commands (ops or clock), so replay sees the same changes</td><td><span class="tag mvp">MVP</span> S6</td></tr>
+  <tr><td>Self-trade prevention</td><td>exchange-core</td><td>In the match loop, before filling: if the resting order's account equals the incoming account, cancel the incoming remainder and stop</td><td><span class="tag mvp">MVP</span> S6</td></tr>
+  <tr><td>DAY expiry</td><td>exchange-core</td><td>On the CLOSED transition, walk the books in symbol, then order-ID order and cancel each live order</td><td><span class="tag mvp">MVP</span> S6</td></tr>
+  <tr><td>Kill switch</td><td>exchange-core</td><td>Disabled-accounts set checked on validate; per-account order index to cancel all its orders (in ID order)</td><td><span class="tag mvp">MVP</span> S6/S10</td></tr>
+  <tr><td>Sequencing</td><td>Disruptor + matching thread</td><td>Many gateway threads publish into one ring; one consumer assigns sequence numbers</td><td><span class="tag mvp">MVP</span> S7</td></tr>
+  <tr><td>Durability, replay</td><td>Journal handler</td><td>Append-only binary records <code>[len][seq][type][payload][crc32c]</code>, segment files, fsync per batch; replay tool and SHA-256 checksum of the event log</td><td><span class="tag mvp">MVP</span> S8</td></tr>
+  <tr><td>Book and trade feeds</td><td>Market-data handler</td><td>Level changes become <code>book.update</code> messages, plus a snapshot on subscribe; sequence numbers let clients detect gaps</td><td><span class="tag mvp">MVP</span> S11</td></tr>
+  <tr><td>Kafka events</td><td>Kafka publisher</td><td>Tails the event log; idempotent producer, <code>acks=all</code>; remembers the last published sequence</td><td><span class="tag mvp">MVP</span> S15</td></tr>
+  <tr><td>Positions, P&amp;L, charges</td><td>post-trade</td><td>Consumes trades; applies each event once using its <code>seq</code> as the idempotency key; writes with jOOQ</td><td><span class="tag mvp">MVP</span> S16</td></tr>
+  <tr><td>Leaderboard</td><td>post-trade, Redis</td><td><code>ZADD prayog:leaderboard &lt;netPnl&gt; &lt;account&gt;</code>; read with <code>ZREVRANGE</code></td><td><span class="tag mvp">MVP</span> S17</td></tr>
+  <tr><td>IOC</td><td>exchange-core</td><td>Same as limit, but skip the "rest" step and cancel the remainder</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td>Stop-loss</td><td>exchange-core</td><td>Separate trigger books per side, sorted by trigger price; after each trade, pop every triggered stop and inject it as a new limit order. Loop until no new triggers (cascade), in a deterministic order</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td>Buying power</td><td>Risk stage before matching</td><td>In-memory balances per account; reserve on accept, release on cancel or fill. Must be in the deterministic pipeline, not a DB call</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td>Call auction</td><td>exchange-core</td><td>Collect without matching; at uncross, build cumulative buy and sell volume per price, choose the price with maximum executable volume (then tie-breakers), fill in priority order at that single price</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td>Hot standby</td><td>Infrastructure</td><td>Replicate the sequenced input stream to a second engine that replays it live (section 7)</td><td><span class="tag later">LATER</span></td></tr>
+</table></div>
+
+<h2 id="components">5. Components</h2>
+
+<h3 id="c-gateway">5.1 Gateway <span class="tag mvp">MVP</span> S10</h3>
+<p><strong>What it does:</strong> the only door into the exchange. It authenticates, rate-limits, validates shape, converts JSON to commands, and sends results and feeds back out. It holds WebSocket sessions and nothing about books.</p>
+<p><strong>Why WebFlux:</strong> it handles thousands of connections on a few event-loop threads. That suits thousands of long-lived WebSockets better than one thread per connection. Spring's own WebSocket support means no extra server.</p>
+<h4>Key design points</h4>
+<ul>
+  <li>Validate the JWT locally (cached public keys from Keycloak). Calling Keycloak per request would put the network on every order.</li>
+  <li>Token-bucket rate limit, written by hand (BUILD_PLAN 16.1 #22). It is ~30 lines, and writing it teaches the algorithm.</li>
+  <li>Never block an event-loop thread. Publishing to the ring is non-blocking. If the ring is full, fail fast with 503.</li>
+  <li>Correlate responses by <code>clientOrderId</code>. The engine's reply comes back on another thread, and the gateway completes the waiting HTTP response.</li>
+</ul>
+<div class="lib"><strong>If we used a library: Bucket4j (Apache-2.0) for rate limiting</strong>
+<pre><code>Bucket bucket = Bucket.builder()
+    .addLimit(limit -&gt; limit.capacity(50).refillGreedy(50, Duration.ofSeconds(1)))
+    .build();
+if (!bucket.tryConsume(1)) {
+    return problem(429, RejectReason.RATE_LIMITED);
+}</code></pre>
+Gives: proven token buckets, distributed buckets backed by Redis (useful if we ever run several gateways). We write our own because the single-gateway version is tiny, and the plan explicitly says "no library". Revisit if gateways scale out.</div>
+<div class="lib"><strong>Later: a FIX gateway with QuickFIX/J (QuickFIX licence, BSD-style)</strong>
+<pre><code>public void fromApp(Message msg, SessionID session) {
+    if (msg instanceof NewOrderSingle nos) {
+        ring.publish(toNewOrder(nos, accountFor(session)));   // same command as REST
+    }
+}</code></pre>
+FIX is the standard protocol between brokers and exchanges. Writing a FIX engine (session layer, resend, sequence recovery) is large and not where the learning is. This is the one place we would <em>use</em> the library outright.</div>
+
+<h3 id="c-seq">5.2 Sequencer pipeline (Disruptor) <span class="tag mvp">MVP</span> S7</h3>
+<p><strong>What it does:</strong> turns many concurrent producers (gateway threads, the clock thread, ops) into one ordered stream for the matching thread.</p>
+<svg viewBox="0 0 900 200" role="img" aria-label="Disruptor ring: producers claim slots and publish; the matching handler consumes in order; journal and market data handlers follow behind it.">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <text x="20" y="40">Producers</text><text x="20" y="58" class="muted small">gateway threads, clock, ops</text>
+  <g>
+    <rect class="box" x="220" y="70" width="44" height="44"/><rect class="box" x="264" y="70" width="44" height="44"/><rect class="box" x="308" y="70" width="44" height="44"/>
+    <rect class="hotbox" x="352" y="70" width="44" height="44"/><rect class="hotbox" x="396" y="70" width="44" height="44"/><rect class="box" x="440" y="70" width="44" height="44"/>
+    <rect class="box" x="484" y="70" width="44" height="44"/><rect class="box" x="528" y="70" width="44" height="44"/>
+    <text x="242" y="96" text-anchor="middle" class="small">101</text><text x="286" y="96" text-anchor="middle" class="small">102</text><text x="330" y="96" text-anchor="middle" class="small">103</text>
+    <text x="374" y="96" text-anchor="middle" class="small">104</text><text x="418" y="96" text-anchor="middle" class="small">105</text><text x="462" y="96" text-anchor="middle" class="small">106</text>
+    <text x="506" y="96" text-anchor="middle" class="small">107</text><text x="550" y="96" text-anchor="middle" class="small">…</text>
+  </g>
+  <path class="line" d="M120,62 C 200,62 480,30 506,68" marker-end="url(#b)"/><text x="330" y="38" class="muted small">claim next slot, write, publish</text>
+  <path class="line" d="M418,160 V118" marker-end="url(#b)"/><text x="380" y="176" class="small">matching handler (at 105)</text>
+  <path class="line" d="M330,140 V118" marker-end="url(#b)"/><text x="230" y="152" class="small">journal (gated: ≤ matching)</text>
+  <path class="line" d="M264,135 V118" marker-end="url(#b)"/>
+  <text x="600" y="90" class="muted small">The ring is a fixed array reused forever:</text>
+  <text x="600" y="106" class="muted small">no allocation per message, no locks,</text>
+  <text x="600" y="122" class="muted small">consumers track a sequence counter each.</text>
+</svg>
+<h4>Key design points</h4>
+<ul>
+  <li><strong>Pre-allocated ring of 65,536 mutable slots.</strong> Producers copy data in; nobody allocates per message, so the garbage collector has little to do.</li>
+  <li><strong>Handlers form a dependency graph.</strong> Journal and publishers run <em>after</em> matching on the same slots, in parallel with each other, each on its own thread.</li>
+  <li><strong>Wait strategy</strong>: <code>BLOCKING</code> (low CPU, for laptops) by default; <code>BUSY_SPIN</code> burns a whole core to shave microseconds (benchmarks).</li>
+  <li><strong>Batching for free</strong>: a handler that falls behind sees many ready slots and processes them as a batch. That is where group-commit fsync comes from.</li>
+</ul>
+<div class="lib"><strong>We use the library: LMAX Disruptor (Apache-2.0)</strong>
+Writing a correct lock-free ring (memory barriers, false sharing, wrap-around) is a research project. We use the Disruptor and write the handlers. To learn how it works, read its "Disruptor technical paper" and the <code>Sequence</code> and <code>RingBuffer</code> classes.<br>
+<em>Alternative:</em> Agrona's <code>ManyToOneRingBuffer</code> (Apache-2.0): lower level, binary messages, used inside Aeron.</div>
+
+<h3 id="c-engine">5.3 Matching engine and order book <span class="tag mvp">MVP</span> S4–S6</h3>
+<p><strong>What it does:</strong> applies the exchange rules to each command, keeps the books and emits events. Pure Java, no framework, no I/O: it can be tested with plain unit and property tests.</p>
+<h4>Data structures (built in S4)</h4>
+<pre><code>OrderBook (one per symbol)
+  bids : TreeMap&lt;price, PriceLevel&gt;  highest first
+  asks : TreeMap&lt;price, PriceLevel&gt;  lowest first
+  ordersById : HashMap&lt;orderId, RestingOrder&gt;
+
+PriceLevel                         RestingOrder (is the list node)
+  head ⇄ order ⇄ order ⇄ tail        orderId, accountId, side, price, leaves
+  totalQuantity, orderCount          prev, next, level</code></pre>
+<div class="table-wrap"><table>
+  <tr><th>Operation</th><th>Cost</th><th>How</th></tr>
+  <tr><td>Best bid/ask</td><td>O(log L)*</td><td><code>firstEntry()</code> of the tree (L = number of price levels)</td></tr>
+  <tr><td>Add order</td><td>O(log L)</td><td>Find or create the level; append to the tail</td></tr>
+  <tr><td>Fill oldest at best</td><td>O(1) per fill</td><td>Take the head; unlink when filled</td></tr>
+  <tr><td>Cancel by ID</td><td>O(1) + O(log L) if the level empties</td><td>Hash lookup, unlink using prev/next</td></tr>
+</table></div>
+<p class="note">*In practice L is small (hundreds), so the tree is shallow. Benchmarks in S9 decide whether to change it.</p>
+<h4>What production engines do differently (and when we would follow)</h4>
+<div class="table-wrap"><table>
+  <tr><th>Part</th><th>Prayog now</th><th>Production</th><th>Why they do it</th><th>When for us</th></tr>
+  <tr><td>Price → level</td><td><code>TreeMap</code></td><td><strong>Array indexed by price</strong>: <code>slot = (price − bandLow) / tick</code>, plus a bitmap of non-empty slots. Or an adaptive radix tree (exchange-core)</td><td>O(1) lookup, no allocation. Bands bound the range: ₹100 ±20%, tick 5p → 800 slots</td><td>After S6 (bands) if S9 shows the tree costs</td></tr>
+  <tr><td>Order index</td><td><code>HashMap&lt;Long,…&gt;</code></td><td>Primitive-key map (Agrona <code>Long2ObjectHashMap</code>)</td><td>No <code>Long</code> boxing, no per-entry objects</td><td>With the array change; Agrona is approved</td></tr>
+  <tr><td>Order objects</td><td><code>new</code> per order</td><td>Object pool, reused</td><td>Zero garbage → no GC pauses on the matching thread</td><td>If GC pauses show in S9 latency histograms</td></tr>
+  <tr><td>Events</td><td>Records allocated per event</td><td>Written straight into pre-allocated buffers ("flyweights")</td><td>Zero allocation</td><td>Later; records are clearer while learning</td></tr>
+  <tr><td>Queue per level</td><td>Intrusive doubly linked list</td><td>Same (or arrays with tombstones for cache locality)</td><td>O(1) cancel; cancels dominate real order flow</td><td>Already production-standard</td></tr>
+</table></div>
+<h4>How it is tested</h4>
+<ul>
+  <li>Unit tests: one per rule, readable as a specification.</li>
+  <li>Property tests (jqwik): random order flows, checking that the book is never crossed, quantity is conserved, sequences have no gaps, and runs are deterministic.</li>
+  <li>Reference model: a naive list-scanning matcher must produce identical events. It catches "plausible but wrong" bugs like LIFO instead of FIFO.</li>
+  <li><code>checkInvariants()</code> walks the whole structure after each step in tests.</li>
+</ul>
+<div class="lib"><strong>If we used a library: exchange-core (Apache-2.0; last commit Oct 2023)</strong>
+<pre><code>ExchangeCore core = ExchangeCore.builder()
+    .resultsConsumer(new SimpleEventsProcessor(handler))   // trade / reduce / reject callbacks
+    .exchangeConfiguration(ExchangeConfiguration.defaultBuilder().build())
+    .build();
+core.startup();
+core.getApi().submitCommandAsync(ApiPlaceOrder.builder()
+    .uid(301L).orderId(5001L).price(10_005L).size(10L)
+    .action(OrderAction.BID).orderType(OrderType.GTC).symbol(ABC_ID)
+    .build());</code></pre>
+Gives: a complete Disruptor-based engine with risk, journaling, snapshots, IOC/GTC/FOK-budget and ~1 µs latencies. Costs: it would replace S4–S8 (the core learning); its model is crypto-style (currencies, margin, GTC) rather than NSE sessions, bands and DAY orders; it has been inactive since 2023. <strong>Best use for us: read <code>OrderBookNaiveImpl</code> (TreeMap, like ours) next to <code>OrderBookDirectImpl</code> (radix tree + pooling) to see the production step.</strong></div>
+<div class="lib"><strong>Also worth reading: CoralME (Apache-2.0, Java, active)</strong>: a small garbage-free order book with IOC/GTC/DAY, cancel-incoming self-trade prevention and listener callbacks. It is close to what S5–S6 build, and a good comparison after we finish ours. <strong>Liquibook</strong> (C++, custom OCI licence): a classic open-source order book, for reading only.</div>
+
+<h3 id="c-clock">5.4 Simulated clock <span class="tag mvp">MVP</span> S7</h3>
+<p>A small thread off the order path reads wall time every 100 ms and publishes a <code>ClockTick(simTime)</code> command into the ring, where <code>simTime = sessionStart + wallElapsed × multiplier</code>. The engine keeps "current sim time" = the last tick. Session changes (09:15 open, 15:30 close) happen when a tick crosses the boundary.</p>
+<p><strong>Why ticks are commands:</strong> they are journaled like orders, so a replay sees the exact same times in the same places, even if the replay runs 1,000× faster than real time. The wall clock is read in exactly one place, and that place is outside the engine.</p>
+<p><strong>Resolution trade-off:</strong> every event between two ticks shares a sim time; the sequence number gives the order. Finer ticks mean more journal records. 100 ms is plenty for a human-speed market.</p>
+
+<h3 id="c-journal">5.5 Journal and replay <span class="tag mvp">MVP</span> S8</h3>
+<p>Two append-only logs (BUILD_PLAN 16.1 #14):</p>
+<ul>
+  <li><strong>Input journal</strong>: every command in sequence order. Replaying it rebuilds the engine state exactly. This is <em>event sourcing</em>: the log is the truth, and memory is a cache of it.</li>
+  <li><strong>Event log</strong>: every event produced. It is used for the determinism checksum and as the source the Kafka publisher reads.</li>
+</ul>
+<pre><code>record = [length:int][seq:long][type:short][payload:bytes][crc32c:int]
+segments: /data/journal/input-000001.log, input-000002.log, …   (roll at a size limit)</code></pre>
+<ul>
+  <li><strong>CRC32C</strong> detects a torn final record after a crash: replay stops at the first bad checksum.</li>
+  <li><strong>fsync per batch</strong>: the OS caches writes in memory, and only <code>fsync</code> guarantees they reached the disk. One fsync per Disruptor batch amortises the ~1 ms cost.</li>
+  <li><strong>Replay check in CI</strong>: run a recorded session, replay it, and compare SHA-256 of the two event logs.</li>
+  <li><span class="tag later">LATER</span> <strong>Snapshots</strong>: replaying a whole day is slow, so periodically serialise the books with the sequence number they reflect, then replay only from there.</li>
+</ul>
+<div class="lib"><strong>If we used a library: Chronicle Queue (Apache-2.0)</strong>
+<pre><code>try (ChronicleQueue queue = ChronicleQueue.singleBuilder("/data/journal/input").build()) {
+    ExcerptAppender appender = queue.createAppender();
+    appender.writeDocument(w -&gt; w.write("newOrder").marshallable(cmd));
+    // replay:
+    ExcerptTailer tailer = queue.createTailer();
+    while (tailer.readDocument(r -&gt; engine.apply(readCommand(r)))) { }
+}</code></pre>
+Gives: memory-mapped files, microsecond appends, daily file rolling and tailers with indexing. Costs: it hides the parts worth learning (record framing, checksums, fsync semantics), and some features are in the commercial edition. Plan default: write our own behind a <code>Journal</code> interface; switch if benchmarks demand it (BUILD_PLAN section 8).</div>
+
+<h3 id="c-md">5.6 Market data <span class="tag mvp">MVP</span> S11</h3>
+<ul>
+  <li><strong>Snapshot + deltas</strong>: on subscribe, send <code>book.snapshot</code> (all levels, with the seq it reflects), then <code>book.update</code> for each level change. The client applies deltas with seq &gt; snapshot seq.</li>
+  <li><strong>Gap detection</strong>: per-symbol seq numbers; a gap means "re-request the snapshot". This is the same pattern as exchange multicast feeds with a recovery channel.</li>
+  <li><strong>Slow consumers</strong>: each WebSocket has a bounded outgoing buffer. If it fills, the client is too slow, so drop its queued updates and send a fresh snapshot (conflation), or disconnect it. Never let one slow browser hold memory for ever or slow the publisher.</li>
+  <li><strong>Privacy</strong>: public trades carry no account IDs (the schema forbids them); private order updates go only to the owner's sessions.</li>
+  <li>The engine emits <code>BookUpdate</code> from the level totals it already keeps, so market data never reads the book from another thread (which would need locks).</li>
+</ul>
+
+<h3 id="c-kafka">5.7 Kafka publisher <span class="tag mvp">MVP</span> S15</h3>
+<p><strong>Kafka in one paragraph:</strong> a <em>topic</em> is an append-only log split into <em>partitions</em>. Producers append; each record gets an <em>offset</em> (its position in the partition). Consumers read in order and periodically save ("commit") the offset they reached, so after a restart they continue from there. Order is guaranteed only within one partition, so we key by symbol: all ABC events land in one partition, in order.</p>
+<ul>
+  <li><strong>Source</strong>: the publisher tails the event log, not the ring, so it can be minutes behind without slowing anything. It remembers "last published seq" and resumes from seq + 1 after a restart or Kafka outage.</li>
+  <li><strong>At-least-once</strong>: if the publisher crashes after Kafka stored a record but before it noted the seq, it sends that record again. Duplicates are possible; loss is not.</li>
+  <li><strong>Producer settings</strong>: <code>acks=all</code> (written to all replicas before success), idempotent producer on (Kafka drops its own retry duplicates within a session).</li>
+  <li><strong>Consumers must be idempotent</strong>: because of at-least-once delivery, post-trade skips events whose <code>seq</code> it has already applied (section 5.8).</li>
+</ul>
+<div class="lib"><strong>Alternatives</strong>: <em>Kafka transactions</em> (exactly-once from Kafka to Kafka) do not cover our PostgreSQL writes, so idempotent consumers are needed anyway. <em>Transactional outbox + Debezium</em> suits apps whose truth is a database; ours is the journal, so tailing the journal <em>is</em> our outbox.</div>
+
+<h3 id="c-post">5.8 Post-trade service <span class="tag mvp">MVP</span> S16</h3>
+<ul>
+  <li>Consumes <code>Trade</code> events; for each trade updates two accounts (buyer and seller).</li>
+  <li><strong>Exactly-once effect from at-least-once delivery</strong>: in one database transaction, insert the event's <code>seq</code> into <code>applied_event</code> (primary key) and update positions. A duplicate fails the insert, so it is skipped. The Kafka offset is committed after the transaction.</li>
+  <li><strong>Positions</strong>: <code>(account, symbol) → quantity, total cost in paise</code>. Average price = cost ÷ quantity, computed when shown, so nothing is rounded in storage.</li>
+  <li><strong>Unrealised P&amp;L</strong> needs the last price: kept from trade prints in memory or Redis, not recomputed in SQL per tick.</li>
+  <li><strong>jOOQ + Flyway</strong>: SQL-first, type-safe queries generated from the migrated schema; migrations run once as a job before services start.</li>
+</ul>
+
+<h3 id="c-board">5.9 Leaderboard <span class="tag mvp">MVP</span> S17</h3>
+<p>A Redis <strong>sorted set</strong> keeps members ordered by score: <code>ZADD prayog:leaderboard 931.50 acct-7</code>. "Top 20" is <code>ZREVRANGE … 0 19 WITHSCORES</code>, O(log N + 20). Redis is a cache here: it can be rebuilt from PostgreSQL at any time.</p>
+
+<h3 id="c-agents">5.10 Simulated traders and SDK <span class="tag mvp">MVP</span> S12–S13</h3>
+<ul>
+  <li><strong>SDK</strong>: async Python client. It gets a token, places orders over REST, streams over WebSocket, keeps a local book from snapshot + deltas, and checks seq gaps.</li>
+  <li><strong>Agents</strong>: one asyncio process running many traders. Each trader has a strategy and a seeded random generator. A hidden "fair value" per symbol follows a random walk with occasional jumps, and market makers quote around it.</li>
+  <li>They connect like any user (client credentials), which load-tests the gateway for free.</li>
+</ul>
+
+<h3 id="c-web">5.11 Web terminal <span class="tag mvp">MVP</span> S18–S19</h3>
+<ul>
+  <li>React + Redux Toolkit. RTK Query handles REST (orders, blotter, leaderboard); a WebSocket middleware feeds book and trade updates into the store.</li>
+  <li>Book rendering is throttled to animation frames: updates may arrive faster than 60 per second, and nobody can read faster.</li>
+  <li>All prices are integers in the store, formatted as ₹ only in the view. Every integer from the server is below 2<sup>53</sup> by schema, so JavaScript numbers are exact.</li>
+  <li>Charts: TradingView Lightweight Charts (attribution link required).</li>
+</ul>
+
+<h3 id="c-obs">5.12 Observability <span class="tag mvp">MVP</span> S21</h3>
+<ul>
+  <li>Micrometer metrics → Prometheus → Grafana: orders/s, rejects by reason, ring fill level, journal fsync time, Kafka lag (last journaled seq − last published seq), consumer lag.</li>
+  <li>Latency as HdrHistogram percentiles (p50/p99/p99.9/max), never averages: averages hide the tail that traders feel.</li>
+  <li>Structured JSON logs to stdout, with the order's seq so one order can be traced across services.</li>
+</ul>
+
+<h2 id="failures">6. Failure modes</h2>
+<div class="table-wrap"><table>
+  <tr><th>What fails</th><th>What happens</th><th>Recovery</th></tr>
+  <tr><td>Exchange process crashes</td><td>Trading stops (single instance). Nothing acknowledged is lost: acks happen after fsync</td><td>Restart → replay the input journal → identical state → reopen. LATER: hot standby takes over in milliseconds</td></tr>
+  <tr><td>Torn write at crash</td><td>Last record half-written</td><td>CRC fails → truncate to the last good record. That command was never acknowledged</td></tr>
+  <tr><td>Kafka down</td><td>Trading continues; publisher lag grows</td><td>Publisher resumes from last published seq + 1</td></tr>
+  <tr><td>Post-trade or PostgreSQL down</td><td>Positions and P&amp;L go stale; trading unaffected</td><td>Consumer resumes from its committed offset; duplicates skipped by seq</td></tr>
+  <tr><td>Redis lost</td><td>Leaderboard empty</td><td>Rebuild from PostgreSQL</td></tr>
+  <tr><td>Ring full (overload)</td><td>Gateway returns 503 / RATE_LIMITED</td><td>Clients back off; investigate the slow handler</td></tr>
+  <tr><td>Slow WebSocket client</td><td>Its buffer fills</td><td>Conflate to a snapshot, or disconnect it; others unaffected</td></tr>
+  <tr><td>Runaway bot</td><td>Rate limit absorbs it</td><td>Per-account kill switch</td></tr>
+  <tr><td>Disk full</td><td>Journal cannot write → cannot ack</td><td>Halt the market (fail safe), alert. Never trade without durability</td></tr>
+  <tr><td>Bug in matching</td><td>Wrong trades</td><td>Fix → replay the journal into the fixed engine to see the differences; cancel or correct trades (an ops procedure)</td></tr>
+</table></div>
+
+<h2 id="prod">7. From MVP to production</h2>
+<p>The MVP is architecturally faithful to production exchanges. Here is what they add:</p>
+<div class="table-wrap"><table>
+  <tr><th>Concern</th><th>MVP</th><th>Production</th></tr>
+  <tr><td>Availability</td><td>One instance; restart + replay</td><td><strong>Replicated state machine</strong>: the sequenced input stream is copied to standby engines that replay it live. Leader election (Raft) promotes one if the leader dies. Determinism is what makes this work, which is why we protect it now. Library: Aeron Cluster (Apache-2.0)</td></tr>
+  <tr><td>Restart time</td><td>Replay the whole journal</td><td>Snapshots + replay the tail</td></tr>
+  <tr><td>Latency</td><td>Java objects, TreeMap, GC</td><td>Pooling, primitive maps, price arrays, CPU pinning, kernel-bypass networking</td></tr>
+  <tr><td>Scale</td><td>One shard (all symbols, one thread)</td><td>Symbols spread over shards, each with its own thread and journal</td></tr>
+  <tr><td>Risk</td><td>Unlimited money</td><td>Pre-trade risk stage: buying power, position limits, order-value limits, all in memory and deterministic</td></tr>
+  <tr><td>Protocols</td><td>REST + WebSocket JSON</td><td>FIX for brokers; binary feeds (ITCH/SBE-style) for market data; drop copy for compliance</td></tr>
+  <tr><td>Audit</td><td>Journals</td><td>Tamper-evident retention, regulator reporting, surveillance analytics</td></tr>
+  <tr><td>Disaster recovery</td><td>None</td><td>A second site receiving the replicated journal</td></tr>
+</table></div>
+<div class="lib"><strong>Sketch: hot standby with Aeron Cluster (Apache-2.0)</strong>
+<pre><code>public final class ExchangeService implements ClusteredService {
+    private final MatchingEngine engine = new MatchingEngine(instruments, this::reply);
+    @Override
+    public void onSessionMessage(ClientSession session, long timestamp,
+                                 DirectBuffer buffer, int offset, int length, Header header) {
+        engine.submit(decode(buffer, offset, length), simTime);   // same deterministic engine
+    }
+    // Aeron Cluster replicates each message to every node (Raft) before delivering it,
+    // so all nodes run the same inputs in the same order and hold the same books.
+}</code></pre>
+Our <code>MatchingEngine</code> already fits this shape: commands in, events out, no clock, no I/O. Keeping it that way keeps this door open.</div>
+
+<h2 id="libs">8. Libraries: use or learn from</h2>
+<div class="table-wrap"><table>
+  <tr><th>Library</th><th>Licence</th><th>Area</th><th>Our choice</th><th>Why</th></tr>
+  <tr><td>LMAX Disruptor</td><td>Apache-2.0</td><td>Sequencer ring</td><td><strong>Use</strong></td><td>Lock-free ring is research-grade work; we learn by writing the handlers</td></tr>
+  <tr><td>networknt json-schema-validator</td><td>Apache-2.0</td><td>Schema tests</td><td><strong>Use</strong></td><td>Standard validator; no learning in writing one</td></tr>
+  <tr><td>Spring Boot, spring-kafka, jOOQ, Flyway</td><td>Apache-2.0 (jOOQ OSS edition: Apache-2.0)</td><td>App plumbing</td><td><strong>Use</strong></td><td>Industry standard</td></tr>
+  <tr><td>Agrona</td><td>Apache-2.0</td><td>Primitive maps, buffers</td><td>Use when benchmarks ask</td><td>Production step for the order index</td></tr>
+  <tr><td>HdrHistogram</td><td>CC0 / BSD-2</td><td>Latency stats</td><td><strong>Use</strong> (S9)</td><td>The standard for latency percentiles</td></tr>
+  <tr><td>exchange-core</td><td>Apache-2.0</td><td>Whole engine</td><td>Learn from</td><td>Would replace the core learning; crypto-style model; inactive since 2023</td></tr>
+  <tr><td>CoralME</td><td>Apache-2.0</td><td>Order book</td><td>Learn from</td><td>Compare with ours after S6</td></tr>
+  <tr><td>Liquibook</td><td>OCI custom</td><td>Order book (C++)</td><td>Learn from</td><td>Classic design reference</td></tr>
+  <tr><td>Chronicle Queue</td><td>Apache-2.0</td><td>Journal</td><td>Fallback</td><td>Use if our journal is too slow (BUILD_PLAN section 8)</td></tr>
+  <tr><td>Bucket4j</td><td>Apache-2.0</td><td>Rate limiting</td><td>Not now</td><td>Ours is tiny; revisit for several gateways</td></tr>
+  <tr><td>Aeron / Aeron Cluster</td><td>Apache-2.0</td><td>Messaging, replication</td><td>Later</td><td>The production HA path</td></tr>
+  <tr><td>QuickFIX/J</td><td>QuickFIX (BSD-style)</td><td>FIX protocol</td><td>Use if we add FIX</td><td>Protocol plumbing, not core learning</td></tr>
+</table></div>
+<p>Adding any library not already in BUILD_PLAN section 8 still needs your approval first (CLAUDE.md).</p>
+
+<h2 id="decisions">9. Open technical decisions</h2>
+<div class="table-wrap"><table>
+  <tr><th>Decision</th><th>Options</th><th>Recommended</th><th>Decide in</th></tr>
+  <tr><td>When does a client get its response?</td><td>After matching / after fsync</td><td>After fsync (durable first). Cost: one batched fsync of latency</td><td>S7/S8</td></tr>
+  <tr><td>Market data before or after fsync?</td><td>Before (faster) / after (never shows a trade that could vanish)</td><td>After, same reason</td><td>S11</td></tr>
+  <tr><td>Price-level structure</td><td>TreeMap / price array + bitmap</td><td>Keep TreeMap; switch only on S9 evidence</td><td>S9</td></tr>
+  <tr><td>Where do instruments come from?</td><td>Config file at startup / journaled admin commands</td><td>Config for MVP; journaled commands when instruments change at runtime</td><td>S7</td></tr>
+  <tr><td>Snapshots</td><td>None / periodic</td><td>None in MVP (a day replays in seconds); add when replay time grows</td><td>Later</td></tr>
+  <tr><td>Slow WebSocket policy</td><td>Disconnect / conflate to snapshot</td><td>Conflate, then disconnect if it keeps happening</td><td>S11</td></tr>
+  <tr><td>Post-trade idempotency key</td><td>Event seq table / last-seq per partition</td><td>Applied-event table: simple, and survives repartitioning</td><td>S16</td></tr>
+  <tr><td>Buying power location</td><td>Inside the engine / separate risk stage in the ring</td><td>Separate stage before matching (exchange-core does this): same determinism, clearer code</td><td>Phase 2</td></tr>
+</table></div>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li>Martin Fowler, "The LMAX Architecture" (martinfowler.com/articles/lmax.html): single-threaded business logic, event sourcing, Disruptor.</li>
+  <li>LMAX Disruptor technical paper and repository: github.com/LMAX-Exchange/disruptor (Apache-2.0).</li>
+  <li>exchange-core: github.com/exchange-core/exchange-core (Apache-2.0): README, <code>OrderBookNaiveImpl</code>, <code>OrderBookDirectImpl</code>.</li>
+  <li>CoralME: github.com/coralblocks/CoralME (Apache-2.0).</li>
+  <li>Liquibook: github.com/enewhuis/liquibook (OCI licence).</li>
+  <li>WK Selph, "How to Build a Fast Limit Order Book" (2011): tree of levels + linked lists + order map.</li>
+  <li>Aeron and Aeron Cluster: github.com/aeron-io/aeron (Apache-2.0); Agrona: github.com/aeron-io/agrona.</li>
+  <li>Chronicle Queue: github.com/OpenHFT/Chronicle-Queue (Apache-2.0).</li>
+  <li>Apache Kafka documentation: delivery semantics, idempotent producer.</li>
+</ul>
+<footer>Prayog · docs/overview/technical.html · Library facts checked 3 Oct 2026. Code in "if we used a library" boxes is illustrative and simplified, not tested against each library's current API.</footer>
+</main>
+</div>
+</body>
+</html>

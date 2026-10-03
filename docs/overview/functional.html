@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prayog Functional Overview</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #5f5e5a; --line: #e3e1db; --card: #ffffff;
+    --accent: #2f5d8a; --code-bg: #f2f0eb; --mvp: #2e7d4f; --p2: #9a6b00; --later: #6f6f6f;
+    --buy: #2e7d4f; --sell: #b3402e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+      --accent: #8bb4dc; --code-bg: #22231f; --mvp: #6fcf97; --p2: #e0b04a; --later: #a0a0a0;
+      --buy: #6fcf97; --sell: #ef8a75;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+    --accent: #8bb4dc; --code-bg: #22231f; --mvp: #6fcf97; --p2: #e0b04a; --later: #a0a0a0;
+    --buy: #6fcf97; --sell: #ef8a75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+  nav { position: sticky; top: 24px; align-self: start; font-size: 14px; max-height: calc(100vh - 48px); overflow: auto; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .sub { padding-left: 12px; font-size: 13px; }
+  main { min-width: 0; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 24px; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 19px; margin: 32px 0 8px; }
+  h4 { font-size: 16px; margin: 0 0 6px; }
+  p, li { max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 18px; }
+  a { color: var(--accent); }
+  code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
+  pre code { padding: 0; background: none; }
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; border: 1.5px solid; white-space: nowrap; vertical-align: middle; }
+  .mvp { color: var(--mvp); } .p2 { color: var(--p2); } .later { color: var(--later); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .card h4 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 17px; }
+  .meta { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 4px 12px; font-size: 14.5px; margin: 8px 0 0; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  .meta ol, .meta ul { margin: 0; padding-left: 18px; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 14px; background: var(--card); margin: 16px 0; }
+  .buy { color: var(--buy); font-weight: 600; } .sell { color: var(--sell); font-weight: 600; }
+  svg { max-width: 100%; height: auto; display: block; margin: 12px 0; }
+  svg text { fill: var(--fg); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  svg .muted { fill: var(--muted); }
+  svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  svg .accent { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  svg .line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  svg .group { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  svg .built { fill: color-mix(in srgb, var(--accent) 20%, var(--card)); stroke: var(--accent); stroke-width: 1.5; }
+  svg .simple { fill: color-mix(in srgb, var(--p2) 18%, var(--card)); stroke: var(--p2); stroke-width: 1.5; }
+  svg .none { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  svg .small { font-size: 10.5px; }
+  svg .fill-mvp { fill: var(--mvp); opacity: .18; } svg .fill-p2 { fill: var(--p2); opacity: .18; } svg .fill-later { fill: var(--later); opacity: .18; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav { position: static; max-height: none; border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 16px; }
+    .meta { grid-template-columns: minmax(0, 1fr); }
+    .meta dt { margin-top: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <strong>Contents</strong>
+  <a href="#scope">How to read this</a>
+  <a href="#bigpicture">1. Exchanges and trading firms</a>
+  <a href="#glance">2. Prayog at a glance</a>
+  <a href="#roles">3. People and roles</a>
+  <a href="#instruments">4. Instruments</a>
+  <a href="#day">5. The trading day</a>
+  <a href="#types">6. Order types and validity</a>
+  <a href="#lifecycle">7. Order lifecycle</a>
+  <a href="#actions">8. Actions</a>
+  <a class="sub" href="#a-access">A. Access</a>
+  <a class="sub" href="#a-orders">B. Orders</a>
+  <a class="sub" href="#a-exchange">C. Exchange rules</a>
+  <a class="sub" href="#a-md">D. Market data</a>
+  <a class="sub" href="#a-post">E. After the trade</a>
+  <a class="sub" href="#a-ops">F. Operations</a>
+  <a class="sub" href="#a-sim">G. Simulated market</a>
+  <a href="#example">9. Worked example</a>
+  <a href="#decisions">10. Open decisions</a>
+  <a href="#glossary">11. Glossary</a>
+</nav>
+<main>
+<h1>Prayog functional overview</h1>
+<p class="lede">What a person can do on Prayog, what the exchange does on its own, and when each thing happens. The model is an NSE-style cash equity market, based on public information only. Prayog is a simulation and is not affiliated with any exchange.</p>
+
+<h2 id="scope">How to read this</h2>
+<p>This page describes the <em>target</em> product: what a production exchange in this style offers. Each feature is tagged with when Prayog builds it:</p>
+<ul>
+  <li><span class="tag mvp">MVP</span> in the current build plan (sessions S1–S22).</li>
+  <li><span class="tag p2">PHASE 2</span> next after the MVP. Needs your approval before it enters the plan.</li>
+  <li><span class="tag later">LATER</span> production features we describe so the design leaves room for them, but do not build yet.</li>
+</ul>
+<p>Some things people think of as exchange features are really <strong>broker features</strong>: the broker's system holds the order and sends it to the exchange later (GTT, after-market orders, bracket orders). Those are marked as such. Prayog plays both roles, but the line matters for the design, because broker features live outside the matching engine.</p>
+<p>The companion page, <code>technical.html</code>, explains how each feature is built and how data flows through the system.</p>
+
+<h2 id="bigpicture">1. The big picture: exchanges and trading firms</h2>
+<p>Videos about HFT describe the whole industry at once: exchanges, trading firms, feeds, FPGAs, monitoring, reporting. These belong to <strong>two different organisations</strong> on either side of a network cable:</p>
+<ul>
+  <li><strong>The exchange</strong> (NSE, BSE, Nasdaq) runs the market. It keeps the one official order book per stock, matches orders fairly, publishes prices to everyone, and makes sure trades settle. It does not care whether you win or lose.</li>
+  <li><strong>A trading firm</strong> (an HFT firm, a hedge fund, your paper-trading algo) is a <em>customer</em> of the exchange. It reads the exchange's price feed, decides what to trade, and sends orders. Its whole job is to make money, and in HFT, to do it faster than other firms.</li>
+</ul>
+<p>Both sides have an "order book", which is a common source of confusion. The exchange's book is the <em>real</em> one. A trading firm rebuilds its own <em>copy</em> from the exchange's feed (a "book builder") so its strategy can read it without asking the exchange.</p>
+
+<svg viewBox="0 0 920 500" role="img" aria-label="Trading firm on the left: research, tick data store, monitoring, P&amp;L and reporting, FPGA hardware and colocation, plus a pipeline from feed handler to book builder, strategy, risk checks, order management and order gateway. Exchange on the right: market data publisher, matching engine, sequencer and order gateway, plus session control, journal, post-trade, leaderboard, surveillance and clearing. Orders flow from firm to exchange; market data flows back. Colours show what Prayog builds.">
+  <defs><marker id="eco" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="group" x="20" y="30" width="440" height="410" rx="10"/>
+  <text x="34" y="52" style="font-weight:600">Trading firm (for example an HFT)</text>
+  <rect class="group" x="500" y="30" width="400" height="410" rx="10"/>
+  <text x="514" y="52" style="font-weight:600">Exchange</text>
+
+  <!-- firm: supporting column -->
+  <rect class="none" x="40" y="75" width="180" height="40" rx="7"/><text x="130" y="99" text-anchor="middle">Research &amp; backtesting</text>
+  <rect class="none" x="40" y="129" width="180" height="40" rx="7"/><text x="130" y="153" text-anchor="middle">Tick data store</text>
+  <rect class="none" x="40" y="183" width="180" height="40" rx="7"/><text x="130" y="207" text-anchor="middle">Monitoring &amp; alerting</text>
+  <rect class="none" x="40" y="237" width="180" height="40" rx="7"/><text x="130" y="261" text-anchor="middle">P&amp;L, risk &amp; reporting</text>
+  <rect class="none" x="40" y="291" width="180" height="40" rx="7"/><text x="130" y="315" text-anchor="middle">FPGAs, fast network cards</text>
+  <rect class="none" x="40" y="345" width="180" height="40" rx="7"/><text x="130" y="369" text-anchor="middle">Colocation, time sync</text>
+
+  <!-- firm: trading pipeline -->
+  <rect class="simple" x="250" y="75" width="190" height="40" rx="7"/><text x="345" y="94" text-anchor="middle">Feed handler</text><text x="345" y="108" text-anchor="middle" class="muted small">market data ingestion</text>
+  <rect class="simple" x="250" y="129" width="190" height="40" rx="7"/><text x="345" y="148" text-anchor="middle">Book builder</text><text x="345" y="162" text-anchor="middle" class="muted small">local copy of the book</text>
+  <rect class="simple" x="250" y="183" width="190" height="40" rx="7"/><text x="345" y="202" text-anchor="middle">Strategy / signals</text><text x="345" y="216" text-anchor="middle" class="muted small">the "alpha"</text>
+  <rect class="none" x="250" y="237" width="190" height="40" rx="7"/><text x="345" y="256" text-anchor="middle">Pre-trade risk checks</text><text x="345" y="270" text-anchor="middle" class="muted small">limits, fat-finger, kill</text>
+  <rect class="simple" x="250" y="291" width="190" height="40" rx="7"/><text x="345" y="310" text-anchor="middle">Order management</text><text x="345" y="324" text-anchor="middle" class="muted small">OMS / EMS</text>
+  <rect class="simple" x="250" y="345" width="190" height="40" rx="7"/><text x="345" y="364" text-anchor="middle">Order gateway</text><text x="345" y="378" text-anchor="middle" class="muted small">FIX / binary protocol</text>
+  <path class="line" d="M345,115 V129" marker-end="url(#eco)"/><path class="line" d="M345,169 V183" marker-end="url(#eco)"/><path class="line" d="M345,223 V237" marker-end="url(#eco)"/><path class="line" d="M345,277 V291" marker-end="url(#eco)"/><path class="line" d="M345,331 V345" marker-end="url(#eco)"/>
+
+  <!-- exchange: core pipeline -->
+  <rect class="built" x="520" y="75" width="170" height="40" rx="7"/><text x="605" y="94" text-anchor="middle">Market data publisher</text><text x="605" y="108" text-anchor="middle" class="muted small">book + trades feed</text>
+  <rect class="built" x="520" y="165" width="170" height="60" rx="7"/><text x="605" y="190" text-anchor="middle">Matching engine</text><text x="605" y="206" text-anchor="middle" class="muted small">the official order book</text>
+  <rect class="built" x="520" y="265" width="170" height="40" rx="7"/><text x="605" y="284" text-anchor="middle">Sequencer</text><text x="605" y="298" text-anchor="middle" class="muted small">one fair order of arrival</text>
+  <rect class="built" x="520" y="345" width="170" height="40" rx="7"/><text x="605" y="364" text-anchor="middle">Order gateway</text><text x="605" y="378" text-anchor="middle" class="muted small">checks, rate limits</text>
+  <path class="line" d="M605,345 V305" marker-end="url(#eco)"/><path class="line" d="M605,265 V225" marker-end="url(#eco)"/><path class="line" d="M605,165 V115" marker-end="url(#eco)"/>
+
+  <!-- exchange: supporting column -->
+  <rect class="built" x="710" y="75" width="170" height="40" rx="7"/><text x="795" y="99" text-anchor="middle">Sessions &amp; ops control</text>
+  <rect class="built" x="710" y="129" width="170" height="40" rx="7"/><text x="795" y="153" text-anchor="middle">Journal &amp; replay</text>
+  <rect class="built" x="710" y="183" width="170" height="40" rx="7"/><text x="795" y="202" text-anchor="middle">Post-trade</text><text x="795" y="216" text-anchor="middle" class="muted small">positions, P&amp;L, charges</text>
+  <rect class="built" x="710" y="237" width="170" height="40" rx="7"/><text x="795" y="256" text-anchor="middle">Monitoring, reports</text><text x="795" y="270" text-anchor="middle" class="muted small">+ leaderboard (Prayog)</text>
+  <rect class="none" x="710" y="291" width="170" height="40" rx="7"/><text x="795" y="315" text-anchor="middle">Market surveillance</text>
+  <rect class="none" x="710" y="345" width="170" height="40" rx="7"/><text x="795" y="364" text-anchor="middle">Clearing &amp; settlement</text><text x="795" y="378" text-anchor="middle" class="muted small">clearing house, T+1</text>
+
+  <!-- between the two -->
+  <path class="line" d="M520,95 H440" marker-end="url(#eco)"/><text x="480" y="88" text-anchor="middle" class="muted small">prices</text>
+  <path class="line" d="M440,365 H520" marker-end="url(#eco)"/><text x="480" y="358" text-anchor="middle" class="muted small">orders</text>
+
+  <!-- legend -->
+  <rect class="built" x="20" y="462" width="16" height="16" rx="3"/><text x="44" y="475">Prayog builds it</text>
+  <rect class="simple" x="180" y="462" width="16" height="16" rx="3"/><text x="204" y="475">Simplified, in the SDK, sample bot and agents (and your own bot)</text>
+  <rect class="none" x="640" y="462" width="16" height="16" rx="3"/><text x="664" y="475">Not built (yet)</text>
+</svg>
+
+<h3>What each component does, and where Prayog stands</h3>
+<div class="table-wrap"><table>
+  <tr><th>Component</th><th>What it does</th><th>Prayog</th></tr>
+  <tr><td colspan="3"><strong>Trading firm side</strong></td></tr>
+  <tr><td>Colocation and network</td><td>Servers rented inside the exchange's data centre, cables cut to equal length, microwave links between cities. Every metre is about 5 ns</td><td>Not built. Everything runs on one machine</td></tr>
+  <tr><td>Time sync</td><td>GPS and PTP clocks so every server agrees on time to within nanoseconds. Needed to measure latency and for regulators' timestamps</td><td>Not built. Prayog uses a simulated clock</td></tr>
+  <tr><td>FPGAs and fast network cards</td><td>An FPGA is a chip you program as a circuit rather than as software. HFT firms use them to decode the price feed and fire an order in well under a microsecond, faster than any CPU program. Fast network cards skip the operating system ("kernel bypass") to save microseconds</td><td>Not built. It's hardware. The software ideas behind it (no allocation, busy-spinning, one thread per core) show up in our engine</td></tr>
+  <tr><td>Feed handler (market data ingestion)</td><td>Reads the exchange's raw feed, decodes it, spots missing messages by sequence number, and recovers them</td><td>Simplified: the SDK's WebSocket client with gap detection (S12)</td></tr>
+  <tr><td>Book builder</td><td>Rebuilds each stock's order book from the feed so the strategy can read it locally in nanoseconds</td><td>Simplified: the SDK keeps a local book from snapshot + updates (S12)</td></tr>
+  <tr><td>Strategy / signal engine</td><td>Decides what to buy and sell: market making, arbitrage, momentum. This is the firm's secret ("alpha")</td><td>Yours: your bot. Our agents (S13) are simple strategies that create the market</td></tr>
+  <tr><td>Pre-trade risk checks</td><td>Blocks orders that break limits (position, order size, price far off the market, loss limit) <em>before</em> they leave the firm. Required by regulators after real disasters (Knight Capital lost $440m in 45 minutes in 2012)</td><td>Exchange-side checks are built (max quantity, bands, rate limits, kill switch). Firm-side checks in the SDK could be a Phase 2 item</td></tr>
+  <tr><td>Order management (OMS / EMS)</td><td>Tracks every order's state, handles partial fills and rejects, and decides which exchange to send to ("smart order routing")</td><td>Simplified: the SDK tracks your orders. No routing, because there is only one exchange</td></tr>
+  <tr><td>Order gateway</td><td>Speaks the exchange's order protocol (FIX or binary) and manages the session</td><td>Simplified: REST and WebSocket JSON via the SDK</td></tr>
+  <tr><td>Tick data store</td><td>Records every price update for research. Often terabytes a day, in specialised databases</td><td>Not built. Prayog's journal holds every event, so it could be exported later</td></tr>
+  <tr><td>Research and backtesting</td><td>Replays history through a strategy to estimate how it would have performed, before risking money</td><td>Not built. A natural Later item: replay a recorded Prayog day into your bot</td></tr>
+  <tr><td>Monitoring and alerting</td><td>Dashboards for latency, fills, errors and P&amp;L; alerts when anything drifts</td><td>Built for the exchange (S21). Your bot's own monitoring is up to you</td></tr>
+  <tr><td>P&amp;L, risk and reporting</td><td>Real-time P&amp;L and exposure, end-of-day reconciliation with the broker, regulatory reports</td><td>Built on the broker side: positions, P&amp;L, charges, blotter, leaderboard (S16–S19)</td></tr>
+  <tr><td colspan="3"><strong>Exchange side</strong></td></tr>
+  <tr><td>Order gateway</td><td>Accepts connections, authenticates, rate-limits, checks message shape</td><td><strong>Built</strong> (S10)</td></tr>
+  <tr><td>Sequencer</td><td>Puts all orders from all members into one official arrival order, which is what makes "first come, first served" fair</td><td><strong>Built</strong> (S7)</td></tr>
+  <tr><td>Matching engine</td><td>Keeps the official order books and applies the rules: priority, bands, sessions, self-trade prevention</td><td><strong>Built</strong> (S4–S6). S4 is done</td></tr>
+  <tr><td>Market data publisher</td><td>Sends book changes and trades to everyone at the same moment</td><td><strong>Built</strong> (S11)</td></tr>
+  <tr><td>Journal and replay</td><td>Records every input so the market can be rebuilt exactly after a crash</td><td><strong>Built</strong> (S8)</td></tr>
+  <tr><td>Sessions and ops control</td><td>Opens, halts and closes the market; kill switches</td><td><strong>Built</strong> (S6, S19)</td></tr>
+  <tr><td>Post-trade, monitoring, reports</td><td>For an exchange: trade reports and statistics. For a broker: positions, P&amp;L, charges, contract notes</td><td><strong>Built</strong> (S15–S21), simplified</td></tr>
+  <tr><td>Market surveillance</td><td>Looks for manipulation: spoofing, wash trades, pump-and-dump</td><td>Not built (Later)</td></tr>
+  <tr><td>Clearing and settlement</td><td>A clearing house guarantees every trade and moves cash and shares (T+1 in India)</td><td>Not built (Later)</td></tr>
+</table></div>
+
+<div class="note"><strong>Prayog's focus in one line:</strong> build the <em>exchange</em> properly (the same architecture production exchanges use), add a thin broker layer for positions and P&amp;L, and give trading firms (you, your bots, our agents) a starter kit. That kit is the SDK, which covers the trading-firm pipeline in simplified software form. The HFT-specific hardware (FPGAs, colocation, nanosecond clocks) is out of scope: it is a different, very expensive engineering field, and it doesn't change how the market itself works.</div>
+<p><strong>A possible later track:</strong> if you want to go deeper on the trading-firm side, the natural next steps are a backtester that replays a recorded Prayog day into a bot, firm-side risk checks in the SDK, and latency measurement from your bot to the exchange and back. It's listed in <a href="#decisions">open decisions</a>.</p>
+
+<h2 id="glance">2. Prayog at a glance</h2>
+<p>The same picture at the level of what people do. Everything inside the exchange box happens in the moment an order arrives. The "after the trade" boxes update a moment later and can never slow down trading.</p>
+<svg viewBox="0 0 900 410" role="img" aria-label="Traders, bot developers, simulated traders and ops send orders and commands into the Prayog exchange: order entry, then matching, then market data back to everyone. Every event is recorded in the journal. Trades flow down to after-the-trade services: positions and P&amp;L, charges, blotter and reports, and the leaderboard.">
+  <defs><marker id="gl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="none" x="40" y="20" width="170" height="48" rx="8"/><text x="125" y="41" text-anchor="middle">Trader</text><text x="125" y="57" text-anchor="middle" class="muted small">web terminal</text>
+  <rect class="none" x="250" y="20" width="170" height="48" rx="8"/><text x="335" y="41" text-anchor="middle">Bot developer</text><text x="335" y="57" text-anchor="middle" class="muted small">Python SDK / API</text>
+  <rect class="none" x="460" y="20" width="170" height="48" rx="8"/><text x="545" y="41" text-anchor="middle">Simulated traders</text><text x="545" y="57" text-anchor="middle" class="muted small">create the market</text>
+  <rect class="none" x="690" y="20" width="170" height="48" rx="8"/><text x="775" y="41" text-anchor="middle">Ops</text><text x="775" y="57" text-anchor="middle" class="muted small">ops page</text>
+  <path class="line" d="M125,68 V90 M335,68 V90 M545,68 V90 M775,68 V90 M125,90 H775"/>
+  <path class="line" d="M130,90 V145" marker-end="url(#gl)"/>
+  <text x="140" y="118" class="muted small">orders · modifies · cancels · ops commands</text>
+  <path class="line" d="M605,145 V93" marker-end="url(#gl)" stroke-dasharray="5 4"/>
+  <text x="615" y="118" class="muted small">prices · trades · your order updates</text>
+
+  <rect class="group" x="20" y="134" width="860" height="126" rx="10"/>
+  <text x="868" y="252" text-anchor="end" class="muted">Prayog exchange</text>
+  <rect class="built" x="40" y="145" width="180" height="60" rx="8"/><text x="130" y="171" text-anchor="middle">Order entry</text><text x="130" y="188" text-anchor="middle" class="muted small">sign-in · rate limit · checks</text>
+  <rect class="built" x="270" y="145" width="200" height="60" rx="8"/><text x="370" y="171" text-anchor="middle">Matching</text><text x="370" y="188" text-anchor="middle" class="muted small">order books · rules · sessions</text>
+  <rect class="built" x="520" y="145" width="170" height="60" rx="8"/><text x="605" y="171" text-anchor="middle">Market data</text><text x="605" y="188" text-anchor="middle" class="muted small">book · trades · your orders</text>
+  <rect class="built" x="730" y="145" width="140" height="60" rx="8"/><text x="800" y="171" text-anchor="middle">Record</text><text x="800" y="188" text-anchor="middle" class="muted small">journal · replay</text>
+  <path class="line" d="M220,175 H270" marker-end="url(#gl)"/><path class="line" d="M470,175 H520" marker-end="url(#gl)"/>
+  <path class="line" d="M420,205 V235 H800 V205" marker-end="url(#gl)"/>
+  <text x="560" y="230" class="muted small">every event recorded</text>
+
+  <path class="line" d="M330,205 V290" marker-end="url(#gl)"/>
+  <text x="338" y="272" class="muted small">trades</text>
+  <rect class="group" x="20" y="290" width="860" height="100" rx="10"/>
+  <text x="32" y="308" class="muted">After the trade (a moment later)</text>
+  <rect class="built" x="40" y="320" width="190" height="50" rx="8"/><text x="135" y="350" text-anchor="middle">Positions &amp; P&amp;L</text>
+  <rect class="built" x="250" y="320" width="150" height="50" rx="8"/><text x="325" y="350" text-anchor="middle">Charges</text>
+  <rect class="built" x="420" y="320" width="180" height="50" rx="8"/><text x="510" y="350" text-anchor="middle">Blotter &amp; reports</text>
+  <rect class="built" x="620" y="320" width="160" height="50" rx="8"/><text x="700" y="350" text-anchor="middle">Leaderboard</text>
+</svg>
+<p>The results of "after the trade" (P&amp;L, blotter, leaderboard) show up in the trader's terminal and through the API, read from those services rather than from the exchange.</p>
+
+<h2 id="roles">3. People and roles</h2>
+<div class="table-wrap"><table>
+  <tr><th>Role</th><th>Who</th><th>How they connect</th><th>What they can do</th></tr>
+  <tr><td><strong>Trader</strong> <span class="tag mvp">MVP</span></td><td>A person trading by hand</td><td>Web terminal at <code>app.prayog.localhost</code>, signed in through Keycloak</td><td>Place, modify and cancel orders; watch the book and charts; see positions, P&amp;L and the leaderboard</td></tr>
+  <tr><td><strong>Bot developer</strong> <span class="tag mvp">MVP</span></td><td>A person running their own algorithm</td><td>Python SDK or plain REST + WebSocket, with a client ID and secret as the API key</td><td>Everything a trader can do, but from code. Higher message rates, so rate limits matter</td></tr>
+  <tr><td><strong>Simulated trader</strong> <span class="tag mvp">MVP</span></td><td>Prayog's own agents that create the market</td><td>The same public API as bots: no back door</td><td>Quote prices, trade on news-like shocks, add noise. They make the market feel alive</td></tr>
+  <tr><td><strong>Ops</strong> <span class="tag mvp">MVP</span></td><td>The person running the exchange</td><td>Ops page in the web app (role <code>ops</code>)</td><td>Open, halt and close the market; kill switch per account; change the clock speed; watch health</td></tr>
+  <tr><td><strong>Viewer</strong> <span class="tag p2">PHASE 2</span></td><td>Anyone not signed in</td><td>Public market data and leaderboard</td><td>Watch only</td></tr>
+  <tr><td><strong>Risk / compliance</strong> <span class="tag later">LATER</span></td><td>Surveillance staff</td><td>Reports and alerts</td><td>Spot wash trades, spoofing and unusual activity; review audit trails</td></tr>
+</table></div>
+
+<h2 id="instruments">4. Instruments</h2>
+<p>An <strong>instrument</strong> is something you can trade (here, a share of a made-up company). Every instrument has static settings that the exchange checks on every order.</p>
+<div class="table-wrap"><table>
+  <tr><th>Setting</th><th>Meaning</th><th>Example</th><th>Status</th></tr>
+  <tr><td>Symbol</td><td>Short name, upper case</td><td><code>ABC</code></td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td>Tick size</td><td>Smallest price step. Every price must be a multiple</td><td>5 paise: ₹100.05 is valid, ₹100.03 is rejected</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td>Lot size</td><td>Smallest quantity step. 1 for Indian cash equities</td><td>1 share</td><td><span class="tag mvp">MVP</span> (fixed at 1)</td></tr>
+  <tr><td>Reference price</td><td>The price bands are measured from (normally yesterday's close)</td><td>₹100.00</td><td><span class="tag mvp">MVP</span> (static)</td></tr>
+  <tr><td>Price band</td><td>How far from the reference price an order may be priced today. NSE uses 2%, 5%, 10% or 20% bands depending on the stock</td><td>10% band on ₹100 → valid ₹90.00 to ₹110.00</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td>Max order quantity</td><td>Largest single order. Protects against "fat finger" mistakes</td><td>100,000 shares</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td>Status</td><td>Active, suspended, or delisted</td><td>A suspended stock accepts no orders</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td>Daily reference rollover</td><td>Next day's reference = today's closing price</td><td>Close ₹104.20 → tomorrow's band ₹93.80–₹114.60</td><td><span class="tag later">LATER</span></td></tr>
+</table></div>
+
+<h2 id="day">5. The trading day</h2>
+<p>An exchange is not always open for continuous trading. The day has <strong>sessions</strong>, and each session allows different actions. NSE's cash market day, from public information (check current NSE circulars before relying on exact minutes):</p>
+<svg viewBox="0 0 900 190" role="img" aria-label="Timeline of the NSE-style trading day: pre-open 09:00 to 09:15, continuous trading 09:15 to 15:30, closing, post-close 15:50 to 16:00.">
+  <line class="line" x1="20" y1="70" x2="880" y2="70"/>
+  <rect class="fill-p2" x="40" y="45" width="110" height="50" rx="6"/>
+  <rect class="box" x="40" y="45" width="110" height="50" rx="6" style="fill:none"/>
+  <text x="95" y="66" text-anchor="middle">Pre-open</text>
+  <text x="95" y="83" text-anchor="middle" class="muted">call auction</text>
+  <rect class="fill-mvp" x="160" y="45" width="520" height="50" rx="6"/>
+  <rect class="box" x="160" y="45" width="520" height="50" rx="6" style="fill:none"/>
+  <text x="420" y="66" text-anchor="middle">Continuous trading (normal market)</text>
+  <text x="420" y="83" text-anchor="middle" class="muted">orders match the moment they cross</text>
+  <rect class="fill-later" x="690" y="45" width="80" height="50" rx="6"/>
+  <rect class="box" x="690" y="45" width="80" height="50" rx="6" style="fill:none"/>
+  <text x="730" y="66" text-anchor="middle">Closing</text>
+  <text x="730" y="83" text-anchor="middle" class="muted">price set</text>
+  <rect class="fill-later" x="780" y="45" width="90" height="50" rx="6"/>
+  <rect class="box" x="780" y="45" width="90" height="50" rx="6" style="fill:none"/>
+  <text x="825" y="66" text-anchor="middle">Post-close</text>
+  <text x="825" y="83" text-anchor="middle" class="muted">at close price</text>
+  <text x="40" y="118" class="muted">09:00</text>
+  <text x="160" y="118" class="muted">09:15</text>
+  <text x="652" y="118" class="muted">15:30</text>
+  <text x="780" y="118" class="muted">15:50</text>
+  <text x="845" y="118" class="muted">16:00</text>
+  <rect class="fill-p2" x="40" y="145" width="14" height="14"/><text x="60" y="157">Phase 2</text>
+  <rect class="fill-mvp" x="130" y="145" width="14" height="14"/><text x="150" y="157">MVP</text>
+  <rect class="fill-later" x="200" y="145" width="14" height="14"/><text x="220" y="157">Later</text>
+  <text x="300" y="157" class="muted">MVP has three states: CLOSED, OPEN, HALTED. Open and close times are env vars (default 09:15–15:30).</text>
+</svg>
+<div class="table-wrap"><table>
+  <tr><th>Session</th><th>What happens</th><th>Orders allowed</th><th>Status</th></tr>
+  <tr><td><strong>Closed</strong></td><td>Nothing trades. Open orders from the day are gone (DAY validity)</td><td>None. Broker-side "after-market orders" queue outside the exchange</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td><strong>Pre-open: order entry</strong> (NSE 09:00–09:08, ends at a random moment in the last minute)</td><td>Orders are collected but <em>nothing matches</em>. The ending is random so nobody can game the last second</td><td>Place, modify, cancel limit and market orders</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td><strong>Pre-open: matching</strong> (≈09:08–09:12)</td><td>A <strong>call auction</strong> picks one opening price, the one where the most shares can trade, and all crossing orders trade at it</td><td>None</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td><strong>Buffer</strong> (≈09:12–09:15)</td><td>A quiet gap before continuous trading starts</td><td>None</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td><strong>Open / continuous</strong> (09:15–15:30)</td><td>Every incoming order is matched immediately against the book by price-time priority</td><td>All order types and actions</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td><strong>Halted</strong></td><td>Trading paused by ops or by a circuit breaker. The book is kept</td><td>Cancels only (common policy). New orders and modifies are rejected</td><td><span class="tag mvp">MVP</span> (ops halt)</td></tr>
+  <tr><td><strong>Closing price</strong></td><td>NSE sets the official close from trades near the end of the day; in 2026 it began moving some stocks to a closing auction</td><td>Depends on method</td><td><span class="tag later">LATER</span></td></tr>
+  <tr><td><strong>Post-close</strong> (≈15:50–16:00)</td><td>Trading only at the closing price</td><td>Limit orders at the close price</td><td><span class="tag later">LATER</span></td></tr>
+</table></div>
+<div class="note"><strong>Simulated time.</strong> Prayog's clock is simulated. At 1× it follows real time; ops can speed it up (for example 10×, so a full day takes 37.5 minutes). Every session change is driven by that clock, so a replay of the day sees exactly the same session changes.</div>
+
+<h2 id="types">6. Order types and validity</h2>
+<p>An order has a <strong>type</strong> (how its price works) and a <strong>validity</strong> (how long it lives). Prices are always whole paise.</p>
+<div class="table-wrap"><table>
+  <tr><th>Type</th><th>How it works</th><th>Example</th><th>Where it lives</th><th>Status</th></tr>
+  <tr><td><strong>Limit</strong></td><td>Buy at this price or lower / sell at this price or higher. Whatever does not fill immediately rests on the book</td><td><span class="buy">BUY</span> 10 ABC @ ₹100.00</td><td>Exchange</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td><strong>Market</strong></td><td>Take whatever the book offers, best price first, until filled. Never rests. Prayog stops at the price band; any remainder is cancelled</td><td><span class="sell">SELL</span> 10 ABC at market</td><td>Exchange</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td><strong>Stop-loss limit (SL)</strong></td><td>Sleeps until the last traded price touches the <em>trigger</em>, then becomes a limit order</td><td><span class="sell">SELL</span> 10, trigger ₹95.00, limit ₹94.50</td><td>Exchange (NSE holds stop orders)</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td><strong>Stop-loss market (SL-M)</strong></td><td>Like SL, but becomes a market order when triggered</td><td><span class="sell">SELL</span> 10, trigger ₹95.00</td><td>Exchange or broker</td><td><span class="tag later">LATER</span></td></tr>
+  <tr><td><strong>Disclosed quantity (iceberg)</strong></td><td>Only part of the order shows on the book; the rest refills as it trades. Lets large orders hide their size</td><td>BUY 10,000, show 1,000</td><td>Exchange</td><td><span class="tag later">LATER</span></td></tr>
+  <tr><td><strong>GTT / OCO, bracket and cover orders</strong></td><td>Conditional orders held by the broker, sent to the exchange when the condition is met</td><td>"If ABC hits ₹120, sell 10"</td><td>Broker</td><td><span class="tag later">LATER</span></td></tr>
+</table></div>
+<div class="table-wrap"><table>
+  <tr><th>Validity</th><th>Meaning</th><th>Status</th></tr>
+  <tr><td><strong>DAY</strong></td><td>Lives until the market closes, then expires. The default on Indian exchanges</td><td><span class="tag mvp">MVP</span></td></tr>
+  <tr><td><strong>IOC</strong> (immediate or cancel)</td><td>Fill what you can right now; cancel the rest at once. Never rests. Bots use this a lot</td><td><span class="tag p2">PHASE 2</span></td></tr>
+  <tr><td><strong>FOK</strong> (fill or kill)</td><td>All or nothing, right now. Not offered on NSE cash; common elsewhere</td><td><span class="tag later">LATER</span></td></tr>
+  <tr><td><strong>GTC</strong> (good till cancelled)</td><td>Survives across days. On Indian markets this is a broker feature (GTT), not an exchange one</td><td><span class="tag later">LATER</span> (broker)</td></tr>
+</table></div>
+
+<h2 id="lifecycle">7. Order lifecycle</h2>
+<p>Every order moves through a small set of states. Each arrow is an event the exchange publishes, so the order's state is always rebuildable from its events.</p>
+<svg viewBox="0 0 900 300" role="img" aria-label="Order states: submitted goes to rejected or open; open goes to partially filled, filled, cancelled or expired; partially filled goes to filled, cancelled or expired.">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="box" x="20" y="125" width="120" height="44" rx="8"/><text x="80" y="151" text-anchor="middle">Submitted</text>
+  <rect class="box" x="220" y="30" width="120" height="44" rx="8"/><text x="280" y="56" text-anchor="middle">Rejected</text>
+  <rect class="box" x="220" y="125" width="120" height="44" rx="8"/><text x="280" y="151" text-anchor="middle">Open</text>
+  <rect class="box" x="440" y="125" width="150" height="44" rx="8"/><text x="515" y="151" text-anchor="middle">Partially filled</text>
+  <rect class="box" x="700" y="40" width="120" height="44" rx="8"/><text x="760" y="66" text-anchor="middle">Filled</text>
+  <rect class="box" x="700" y="125" width="120" height="44" rx="8"/><text x="760" y="151" text-anchor="middle">Cancelled</text>
+  <rect class="box" x="700" y="210" width="120" height="44" rx="8"/><text x="760" y="236" text-anchor="middle">Expired</text>
+  <path class="line" d="M140,140 L220,60" marker-end="url(#arr)"/><text x="150" y="88" class="muted">OrderRejected</text>
+  <path class="line" d="M140,147 L220,147" marker-end="url(#arr)"/><text x="148" y="140" class="muted">OrderAccepted</text>
+  <path class="line" d="M340,147 L440,147" marker-end="url(#arr)"/><text x="365" y="140" class="muted">Trade</text>
+  <path class="line" d="M590,147 L700,147" marker-end="url(#arr)"/><text x="600" y="140" class="muted">cancel</text>
+  <path class="line" d="M590,135 L700,70" marker-end="url(#arr)"/><text x="610" y="96" class="muted">last Trade</text>
+  <path class="line" d="M590,160 L700,225" marker-end="url(#arr)"/><text x="612" y="212" class="muted">day ends</text>
+  <path class="line" d="M300,125 C 380,40 600,30 700,55" marker-end="url(#arr)"/><text x="420" y="45" class="muted">one Trade fills it all</text>
+  <path class="line" d="M300,169 C 400,280 600,280 700,240" marker-end="url(#arr)"/><text x="420" y="270" class="muted">cancel or day ends (OrderCancelled)</text>
+  <path class="line" d="M515,169 C 515,190 470,195 470,172" marker-end="url(#arr)"/><text x="425" y="205" class="muted">more Trades</text>
+</svg>
+<p><strong>Open</strong> and <strong>Partially filled</strong> are the live states: the order can still trade, be modified or be cancelled. The other four are final. "Expired" is published as <code>OrderCancelled</code> with a reason; we will add an <code>EXPIRED</code> reason when sessions arrive in S6.</p>
+<p>The quantities always add up: <code>ordered = filled + open + cancelled</code>. Prayog's property tests check this for thousands of random order flows.</p>
+
+<h2 id="actions">8. Actions</h2>
+<p>Every action is described the same way: who does it, when it is allowed, what happens step by step, and what comes out.</p>
+
+<h3 id="a-access">A. Access</h3>
+<div class="card"><h4>Sign in <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Who</dt><dd>Trader, ops</dd>
+  <dt>When</dt><dd>Any time</dd>
+  <dt>What happens</dt><dd><ol><li>The web app sends you to Keycloak's login page.</li><li>Keycloak checks your password and returns a signed access token (a JWT) naming your account and roles.</li><li>The web app sends that token with every request. The gateway checks the signature; it never sees your password.</li></ol></dd>
+  <dt>Edge cases</dt><dd>Tokens expire after minutes and are refreshed silently. A disabled account cannot get a new token.</dd>
+</dl></div>
+<div class="card"><h4>Create bot credentials (API key) <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Who</dt><dd>Bot developer (ops issues them in the MVP)</dd>
+  <dt>What happens</dt><dd>A Keycloak client with a client ID and secret is created. The bot trades those for a token ("client credentials" flow) and then calls the same API as the web app.</dd>
+  <dt>Why it matters</dt><dd>Bots and humans use one API, so a bot can never do something a human cannot.</dd>
+</dl></div>
+<div class="card"><h4>Rate limiting <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Who</dt><dd>Applied by the gateway to every account</dd>
+  <dt>What happens</dt><dd>Each account has a bucket of tokens that refills at a fixed rate (for example 50 per second). Each order, modify or cancel takes a token. An empty bucket means <code>RATE_LIMITED</code>, and the order never reaches the engine.</dd>
+  <dt>Why</dt><dd>One runaway bot must not slow the market for everyone. Real exchanges cap message rates and charge for excessive order-to-trade ratios.</dd>
+</dl></div>
+
+<h3 id="a-orders">B. Orders</h3>
+<div class="card"><h4>Place a limit order <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Who</dt><dd>Trader, bot, simulated trader</dd>
+  <dt>When</dt><dd>Session OPEN (and pre-open in Phase 2)</dd>
+  <dt>What happens</dt><dd><ol>
+    <li>The gateway checks the token, the rate limit and the message shape.</li>
+    <li>The engine validates it: known symbol, quantity 1 to max, price on tick, price inside the band, session open, account enabled. The first failure decides the reject reason.</li>
+    <li>If valid it gets an order ID and an <code>OrderAccepted</code> event.</li>
+    <li>It matches against the opposite side while prices cross: best price first, oldest first at a price. Each match is a <code>Trade</code> at the <em>resting</em> order's price.</li>
+    <li>Whatever is left rests on the book at the back of the queue for its price.</li></ol></dd>
+  <dt>Outcomes</dt><dd><code>OrderRejected</code>, or <code>OrderAccepted</code> followed by zero or more <code>Trade</code>s</dd>
+  <dt>Example</dt><dd>Asks: 5 @ ₹100.00, 5 @ ₹100.10. You <span class="buy">BUY</span> 8 @ ₹100.05 → trade 5 @ ₹100.00; 3 rest as the new best bid at ₹100.05.</dd>
+</dl></div>
+<div class="card"><h4>Place a market order <span class="tag mvp">MVP</span> (S5)</h4><dl class="meta">
+  <dt>When</dt><dd>Session OPEN</dd>
+  <dt>What happens</dt><dd>Same as a limit order, but with no price of your own: it sweeps the opposite side best price first. It stops at the price band (this protects you from buying at absurd prices in a thin book), and any remainder is cancelled with reason <code>NO_LIQUIDITY</code>. It never rests.</dd>
+  <dt>Edge cases</dt><dd>Empty opposite side → accepted, then fully cancelled with <code>NO_LIQUIDITY</code>. Many brokers turn market orders into limit orders a few percent away ("market protection"); Prayog's band limit plays that role.</dd>
+</dl></div>
+<div class="card"><h4>Place an IOC order <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What happens</dt><dd>A limit order that never rests: it fills what it can at its limit or better, and the rest is cancelled at once.</dd>
+  <dt>Why bots like it</dt><dd>No forgotten orders left on the book if the bot crashes.</dd>
+</dl></div>
+<div class="card"><h4>Place a stop-loss order <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What happens</dt><dd><ol><li>Accepted but kept off the visible book, waiting.</li><li>When a trade prints at or through the trigger price (≤ trigger for a sell, ≥ trigger for a buy), it becomes a normal limit order and joins the back of the queue.</li><li>From there it behaves as a limit order.</li></ol></dd>
+  <dt>Edge cases</dt><dd>One trade can trigger many stops, and their fills can trigger more ("stop cascade"). The engine must process triggered stops in a fixed, deterministic order (trigger price, then arrival).</dd>
+</dl></div>
+<div class="card"><h4>Modify an order <span class="tag mvp">MVP</span> (S5)</h4><dl class="meta">
+  <dt>Who</dt><dd>The order's owner</dd>
+  <dt>When</dt><dd>Session OPEN; the order is still live</dd>
+  <dt>What happens</dt><dd><ul>
+    <li><strong>Reduce quantity:</strong> keeps its place in the queue. You are giving up size, which harms no one queued behind you.</li>
+    <li><strong>Increase quantity or change price:</strong> goes to the back of the queue at the (new) price, as if new. Otherwise you could join a queue early with 1 share and later grow to 10,000, jumping everyone.</li>
+    <li><strong>New price crosses the book:</strong> it trades immediately, like a new order.</li>
+    <li><strong>Reduce to the filled amount or below:</strong> treated as a cancel of the open part.</li></ul></dd>
+  <dt>Outcomes</dt><dd><code>OrderModified</code> (with any <code>Trade</code>s), <code>OrderCancelled</code>, or <code>OrderRejected</code> (<code>UNKNOWN_ORDER</code> if already filled)</dd>
+</dl></div>
+<div class="card"><h4>Cancel an order <span class="tag mvp">MVP</span> (S5)</h4><dl class="meta">
+  <dt>When</dt><dd>OPEN or HALTED; the order is still live</dd>
+  <dt>What happens</dt><dd>The open part is removed from the book. Shares already filled stay filled.</dd>
+  <dt>Race</dt><dd>A cancel can arrive just after the order fully filled. That is normal and gets <code>OrderRejected(UNKNOWN_ORDER)</code>. The client must handle "too late to cancel".</dd>
+</dl></div>
+<div class="card"><h4>Cancel all (mass cancel) <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What happens</dt><dd>Cancels all of an account's live orders, optionally for one symbol. Bots use it on startup and before shutting down.</dd>
+</dl></div>
+
+<h3 id="a-exchange">C. Exchange rules (things the exchange does by itself)</h3>
+<div class="card"><h4>Price-time priority matching <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Rule</dt><dd>Best price first; at the same price, the earliest order first. Trades happen at the resting order's price, so an aggressive order can get a better price than its limit ("price improvement").</dd>
+  <dt>Why</dt><dd>It rewards whoever offers the best price, and then whoever offered it first. That encourages people to show liquidity early.</dd>
+</dl></div>
+<div class="card"><h4>Price band rejection <span class="tag mvp">MVP</span> (S6)</h4><dl class="meta">
+  <dt>Rule</dt><dd>A limit price outside today's band is rejected with <code>PRICE_OUTSIDE_BAND</code>. Market orders stop at the band edge.</dd>
+  <dt>Why</dt><dd>It limits damage from mistakes and panic: no single day can move a price more than the band.</dd>
+</dl></div>
+<div class="card"><h4>Self-trade prevention <span class="tag mvp">MVP</span> (S6)</h4><dl class="meta">
+  <dt>Rule</dt><dd>If an incoming order would trade with a resting order from the <em>same account</em>, the incoming order's remainder is cancelled with <code>SELF_TRADE_PREVENTION</code>. Trades already made with other accounts stand.</dd>
+  <dt>Why</dt><dd>Trading with yourself creates fake volume (a "wash trade"), which regulators forbid. Other modes exist (cancel the resting order, or both); <em>cancel incoming</em> is simplest and the most common default.</dd>
+</dl></div>
+<div class="card"><h4>Expiry at end of day <span class="tag mvp">MVP</span> (S6)</h4><dl class="meta">
+  <dt>When</dt><dd>When the session moves to CLOSED</dd>
+  <dt>What happens</dt><dd>Every live DAY order is cancelled, in a fixed order (by symbol, then order ID), so a replay produces the same events.</dd>
+</dl></div>
+<div class="card"><h4>Opening call auction <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What happens</dt><dd><ol><li>During order entry, orders collect without matching.</li><li>At the end, the exchange tries every candidate price and picks the one where the most shares can trade. Ties go to the smallest leftover imbalance, then the price closest to the previous close.</li><li>All crossing orders trade at that one price. The leftovers move into continuous trading.</li></ol></dd>
+  <dt>Why</dt><dd>Overnight news piles up. One fair opening price is better than a chaotic first second of trading.</dd>
+</dl></div>
+<div class="card"><h4>Circuit breakers <span class="tag later">LATER</span></h4><dl class="meta">
+  <dt>What happens</dt><dd>Stock level: the price band already acts as a circuit filter. Market level: when the index falls 10%, 15% or 20% the whole market halts for a set time (SEBI's index circuit breakers). In Prayog this would be an automatic HALTED state.</dd>
+</dl></div>
+
+<h3 id="a-md">D. Market data</h3>
+<div class="card"><h4>Order book (depth) <span class="tag mvp">MVP</span> (S11)</h4><dl class="meta">
+  <dt>What you get</dt><dd>On subscribe, a <strong>snapshot</strong> of every price level (price, total shares, number of orders). After that, an <strong>update</strong> for each level that changes. Each message has a sequence number, so a gap tells you to ask for a fresh snapshot.</dd>
+  <dt>Levels</dt><dd>Aggregated by price ("level 2"). Individual orders are not shown, and neither are account IDs.</dd>
+</dl></div>
+<div class="card"><h4>Trade prints and ticker <span class="tag mvp">MVP</span> (S11)</h4><dl class="meta">
+  <dt>What you get</dt><dd>Every trade, anonymous: price, quantity, time, and which side was the aggressor. The terminal builds the last price, day high/low, volume and candlestick charts from these.</dd>
+</dl></div>
+<div class="card"><h4>Your own order updates <span class="tag mvp">MVP</span> (S11)</h4><dl class="meta">
+  <dt>What you get</dt><dd>A private stream of your own orders' events (accepted, filled, cancelled, rejected). Only you see it.</dd>
+</dl></div>
+
+<h3 id="a-post">E. After the trade</h3>
+<div class="card"><h4>Positions <span class="tag mvp">MVP</span> (S16)</h4><dl class="meta">
+  <dt>What</dt><dd>Shares held per account and symbol: buys add, sells subtract. A negative position is a short sale.</dd>
+  <dt>When</dt><dd>Updated from each trade event a moment after the trade (asynchronously, off the order path).</dd>
+</dl></div>
+<div class="card"><h4>P&amp;L <span class="tag mvp">MVP</span> (S16)</h4><dl class="meta">
+  <dt>Realised</dt><dd>Profit locked in by closing a position. Computed against your average buy price (or FIFO lots; see decisions).</dd>
+  <dt>Unrealised</dt><dd>Profit on paper for what you still hold, valued at the last traded price. It moves with every trade print.</dd>
+  <dt>Net</dt><dd>Realised + unrealised − charges</dd>
+</dl></div>
+<div class="card"><h4>Charges <span class="tag mvp">MVP</span> (simple) · <span class="tag later">LATER</span> (Indian detail)</h4><dl class="meta">
+  <dt>MVP</dt><dd>A flat brokerage per trade plus a percentage fee, set in config.</dd>
+  <dt>Later</dt><dd>The full Indian stack: brokerage, STT, exchange transaction charges, SEBI turnover fee, stamp duty (buy side) and GST on brokerage and fees. Each has its own base and rate, and rounding rules matter.</dd>
+</dl></div>
+<div class="card"><h4>Trade blotter and reports <span class="tag mvp">MVP</span> (S19)</h4><dl class="meta">
+  <dt>What</dt><dd>A list of your orders and trades with times, prices and charges, plus a P&amp;L summary. The production version adds a daily contract note (the legal trade confirmation) and CSV export.</dd>
+</dl></div>
+<div class="card"><h4>Leaderboard <span class="tag mvp">MVP</span> (S17)</h4><dl class="meta">
+  <dt>What</dt><dd>Accounts ranked by net P&amp;L, updated live. Shows totals only, never individual trades.</dd>
+</dl></div>
+<div class="card"><h4>Settlement <span class="tag later">LATER</span></h4><dl class="meta">
+  <dt>What</dt><dd>In India, shares and cash actually change hands one business day after the trade (T+1). Until then the shares are "unsettled". Prayog would simulate cash and holdings balances and a daily settlement run.</dd>
+</dl></div>
+<div class="card"><h4>Buying power and margin checks <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What</dt><dd>Before accepting an order, check that the account can pay for it (cash minus what open orders have already reserved) or has enough shares to sell. In the MVP, accounts have unlimited money: fine for a game, wrong for a realistic broker.</dd>
+  <dt>Design impact</dt><dd>This check must happen on the order path and be deterministic, so balances live inside the engine (or a risk stage before it), not in the database.</dd>
+</dl></div>
+
+<h3 id="a-ops">F. Operations</h3>
+<div class="card"><h4>Open, halt, resume, close the market <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Who</dt><dd>Ops, or the sim clock at the configured times</dd>
+  <dt>What happens</dt><dd>A <code>SessionStateChanged</code> event. Halting keeps the book but stops matching; closing expires DAY orders.</dd>
+</dl></div>
+<div class="card"><h4>Kill switch <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>Global</dt><dd>Ops sets the market to HALTED. Everything stops at once.</dd>
+  <dt>Per account</dt><dd>Ops disables one account: all its live orders are cancelled (reason <code>KILL_SWITCH</code>) and new ones are rejected (<code>ACCOUNT_DISABLED</code>). This is the tool for a misbehaving bot.</dd>
+</dl></div>
+<div class="card"><h4>Change clock speed <span class="tag mvp">MVP</span></h4><dl class="meta">
+  <dt>What happens</dt><dd>Ops changes the multiplier (1×, 10×, 60×). Sim time runs faster; nothing else changes. Because ticks are recorded, a replay is still exact.</dd>
+</dl></div>
+<div class="card"><h4>Replay a session <span class="tag mvp">MVP</span> (S8)</h4><dl class="meta">
+  <dt>What happens</dt><dd>Feed the recorded input journal back into a fresh engine. The output must be byte-for-byte identical (checked with a SHA-256 checksum). This is how bugs are reproduced and how the exchange recovers after a crash.</dd>
+</dl></div>
+<div class="card"><h4>Add or suspend an instrument <span class="tag p2">PHASE 2</span></h4><dl class="meta">
+  <dt>What happens</dt><dd>In the MVP, instruments come from config at startup. Later they become commands that go through the journal, so they replay too.</dd>
+</dl></div>
+
+<h3 id="a-sim">G. Simulated market</h3>
+<div class="card"><h4>Simulated traders <span class="tag mvp">MVP</span> (S13)</h4><dl class="meta">
+  <dt>Kinds</dt><dd><ul>
+    <li><strong>Market makers</strong> keep a buy and a sell order around a fair price and earn the spread. They are why the book is never empty.</li>
+    <li><strong>Momentum traders</strong> buy after rises and sell after falls.</li>
+    <li><strong>Mean-reversion traders</strong> do the opposite.</li>
+    <li><strong>Noise traders</strong> trade randomly in small size and keep volume flowing.</li>
+    <li><strong>News shocks</strong> move each stock's hidden "fair value" now and then, so prices trend.</li></ul></dd>
+  <dt>Rule</dt><dd>They use the public API like any bot: no special access. Their random choices are seeded, but because orders travel over the network their arrival order varies, so a run is not exactly repeatable. The exchange's replay is.</dd>
+</dl></div>
+
+<h2 id="example">9. Worked example: one trader's morning</h2>
+<p>Instrument ABC: tick 5 paise, reference ₹100.00, band 10% (₹90.00–₹110.00). Charges for the example: ₹10 per trade.</p>
+<div class="table-wrap"><table>
+  <tr><th>Sim time</th><th>Action</th><th>Book before (best)</th><th>Result</th><th>Position · avg price</th></tr>
+  <tr><td>09:15:00</td><td>Ops opens the market</td><td>empty</td><td><code>SessionStateChanged(OPEN)</code></td><td>—</td></tr>
+  <tr><td>09:15:02</td><td>Market maker quotes 100 @ ₹99.95 / 100 @ ₹100.05</td><td>—</td><td>Two orders rest</td><td>—</td></tr>
+  <tr><td>09:20:10</td><td>You <span class="buy">BUY</span> 10 @ ₹100.10 (limit)</td><td>ask ₹100.05</td><td>Trade 10 @ <strong>₹100.05</strong> (resting price: 5 paise saved)</td><td>+10 · ₹100.05</td></tr>
+  <tr><td>09:31:00</td><td>You <span class="buy">BUY</span> 10 @ ₹101.95</td><td>ask ₹102.05</td><td>No cross; your bid rests and becomes the best bid</td><td>+10</td></tr>
+  <tr><td>09:33:40</td><td>Momentum bot <span class="sell">SELLS</span> 10 at market</td><td>bid ₹101.95 (yours)</td><td>Trade 10 @ ₹101.95; you are filled</td><td>+20 · ₹101.00</td></tr>
+  <tr><td>10:05:00</td><td>You <span class="sell">SELL</span> 15 @ ₹103.00</td><td>bid ₹103.10</td><td>Trade 15 @ ₹103.10</td><td>+5 · ₹101.00</td></tr>
+  <tr><td>10:30:00</td><td>Last trade on ABC prints at ₹102.50</td><td>—</td><td>Unrealised P&amp;L is revalued</td><td>+5</td></tr>
+</table></div>
+<p>Average price after both buys: (10 × 100.05 + 10 × 101.95) ÷ 20 = <strong>₹101.00</strong>.<br>
+Realised on the sale: (103.10 − 101.00) × 15 = <strong>₹31.50</strong>.<br>
+Unrealised on the 5 left: (102.50 − 101.00) × 5 = <strong>₹7.50</strong>.<br>
+Charges: 3 trades × ₹10 = ₹30.00. <strong>Net P&amp;L: 31.50 + 7.50 − 30.00 = ₹9.00.</strong></p>
+<p>Internally every one of those numbers is whole paise (₹101.00 = 10,100 paise). An average price that isn't a whole number of paise is kept as a total cost (paise × shares) instead, so no rounding happens until display.</p>
+
+<h2 id="decisions">10. Functional decisions still open</h2>
+<p>These change behaviour users can see. Each has a recommended default; we decide when the session that needs it starts.</p>
+<div class="table-wrap"><table>
+  <tr><th>Decision</th><th>Options</th><th>Recommended</th><th>Needed by</th></tr>
+  <tr><td>What can you do while HALTED?</td><td>Nothing / cancels only / cancels and modifies</td><td>Cancels only: people can reduce risk, but nothing new trades</td><td>S6</td></tr>
+  <tr><td>Realised P&amp;L method</td><td>Average cost / FIFO lots</td><td>Average cost: simpler, and what most Indian broker P&amp;L screens show for intraday</td><td>S16</td></tr>
+  <tr><td>Short selling</td><td>Allowed freely / allowed intraday only (square off by close) / not allowed</td><td>Allowed freely in the MVP; intraday-only with auto square-off in Phase 2 (that's how Indian cash shorts work)</td><td>S16</td></tr>
+  <tr><td>Starting cash</td><td>Unlimited / fixed (e.g. ₹10 lakh) with buying-power checks</td><td>Unlimited for MVP; fixed in Phase 2. It makes the leaderboard fairer</td><td>Phase 2</td></tr>
+  <tr><td>Leaderboard metric</td><td>Net P&amp;L / return % / risk-adjusted (Sharpe-like)</td><td>Net P&amp;L first; return % once cash is fixed</td><td>S17</td></tr>
+  <tr><td>Trading-firm track</td><td>None / backtester replaying a Prayog day / SDK-side risk checks / bot latency measurement</td><td>Decide after the MVP; the backtester gives the most learning for algo work</td><td>After MVP</td></tr>
+  <tr><td>Which Phase 2 features first</td><td>IOC, stop-loss, pre-open auction, buying power, mass cancel</td><td>IOC and mass cancel (small, and bots need them), then buying power, then the auction</td><td>After MVP</td></tr>
+</table></div>
+
+<h2 id="glossary">11. Glossary</h2>
+<div class="table-wrap"><table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Bid / ask</td><td>A buy order's price / a sell order's price. Best bid = highest bid; best ask = lowest ask</td></tr>
+  <tr><td>Spread</td><td>Best ask − best bid. Narrow spread = cheap to trade</td></tr>
+  <tr><td>Resting / passive / maker</td><td>An order waiting on the book; it "made" liquidity</td></tr>
+  <tr><td>Aggressive / incoming / taker</td><td>An order that trades on arrival; it "took" liquidity</td></tr>
+  <tr><td>Crossed book</td><td>Best bid ≥ best ask. Must never last in continuous trading: those orders should have traded</td></tr>
+  <tr><td>Depth / level 2</td><td>Total quantity at each price, per side</td></tr>
+  <tr><td>Tick size</td><td>Smallest allowed price step</td></tr>
+  <tr><td>Price band / circuit filter</td><td>Today's allowed price range for a stock</td></tr>
+  <tr><td>Leaves quantity</td><td>The part of an order still open</td></tr>
+  <tr><td>Call auction</td><td>Collect orders, then trade everything at one price that maximises volume</td></tr>
+  <tr><td>Wash trade</td><td>Trading with yourself; blocked by self-trade prevention</td></tr>
+  <tr><td>Paise</td><td>1/100 of a rupee. All Prayog prices are whole paise</td></tr>
+  <tr><td>T+1</td><td>Settlement one business day after the trade</td></tr>
+</table></div>
+
+<footer>Prayog · docs/overview/functional.html · NSE details from public sources; verify exact timings against current NSE circulars. Companion: <a href="technical.html">technical overview</a>.</footer>
+</main>
+</div>
+</body>
+</html>
