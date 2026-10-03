@@ -12,7 +12,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S4 Order book and limit matching (6 h) — ADR 0003
 
 ## M2 Engine complete
-- [ ] S5 Market, cancel, modify (6 h)
+- [x] S5 Market, cancel, modify (6 h) — ADR 0004
 - [ ] S6 Price bands, sessions, self-trade prevention (5 h)
 - [ ] S7 Sequencer and single-writer pipeline (6 h)
 - [ ] S8 Journal and deterministic replay (6 h)

@@ -64,6 +64,11 @@ public final class OrderBook {
         return result;
     }
 
+    /** The resting order with this ID, or null. */
+    RestingOrder order(long orderId) {
+        return ordersById.get(orderId);
+    }
+
     /** The best level on a side, or null when that side is empty. */
     PriceLevel bestLevel(Side side) {
         Map.Entry<Long, PriceLevel> best = levels(side).firstEntry();
@@ -82,6 +87,11 @@ public final class OrderBook {
         if (order.leavesQuantity == 0) {
             remove(order);
         }
+    }
+
+    /** Lowers an order's open quantity in place, keeping its queue position. Must leave some quantity open. */
+    void reduce(RestingOrder order, long quantity) {
+        order.level.reduce(order, quantity);
     }
 
     /** Takes an order off the book, dropping its level if it was the last one there. */
@@ -112,6 +122,7 @@ public final class OrderBook {
                     check(o.prev == prev, "back links match forward links");
                     check(o.level == level && o.side == side && o.price == level.price, "order in the right level");
                     check(o.leavesQuantity > 0, "resting orders have open quantity");
+                    check(o.quantity >= o.leavesQuantity, "open never exceeds ordered");
                     check(ordersById.get(o.orderId) == o, "order indexed by ID");
                     quantity += o.leavesQuantity;
                     count++;

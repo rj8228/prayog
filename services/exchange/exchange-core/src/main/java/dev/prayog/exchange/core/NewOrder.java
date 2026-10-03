@@ -9,7 +9,8 @@ import java.util.Objects;
  * order. Values are not trusted: the engine validates them and rejects with a reason.
  */
 public record NewOrder(
-        String clientOrderId, long accountId, String symbol, Side side, OrderType type, long price, long quantity) {
+        String clientOrderId, long accountId, String symbol, Side side, OrderType type, long price, long quantity)
+        implements Command {
 
     public NewOrder {
         Objects.requireNonNull(clientOrderId, "clientOrderId");

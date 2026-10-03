@@ -26,6 +26,10 @@ class MatchingEngineTest {
     private final MatchingEngine engine = new MatchingEngine(List.of(new Instrument(ABC, 5, 1_000_000)), events::add);
     private final OrderBook book = engine.book(ABC);
 
+    {
+        engine.apply(new ClockTick(T0));
+    }
+
     @AfterEach
     void bookStaysConsistent() {
         book.checkInvariants();
@@ -171,7 +175,8 @@ class MatchingEngineTest {
     @Test
     void eventsAreNumberedInOrderAndStampedWithSimTime() {
         limit(1, SELL, 10_000, 1);
-        engine.submit(new NewOrder("c-2", 2, ABC, BUY, OrderType.LIMIT, 10_000, 1), T0 + 42);
+        engine.apply(new ClockTick(T0 + 42));
+        engine.apply(new NewOrder("c-2", 2, ABC, BUY, OrderType.LIMIT, 10_000, 1));
 
         assertThat(events).extracting(ExchangeEvent::seq).containsExactly(1L, 2L, 3L);
         assertThat(events).extracting(ExchangeEvent::simTime).containsExactly(T0, T0 + 42, T0 + 42);
@@ -182,7 +187,7 @@ class MatchingEngineTest {
     }
 
     private void submit(NewOrder order) {
-        engine.submit(order, T0);
+        engine.apply(order);
     }
 
     private List<Trade> trades() {

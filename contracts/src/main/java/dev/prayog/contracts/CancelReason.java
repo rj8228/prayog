@@ -8,5 +8,7 @@ public enum CancelReason {
     NO_LIQUIDITY,
     /** A modify reduced quantity to the filled amount or below (BUILD_PLAN 16.3). */
     MODIFIED_TO_ZERO,
-    KILL_SWITCH
+    KILL_SWITCH,
+    /** A DAY order still open when the session closed. */
+    EXPIRED
 }

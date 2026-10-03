@@ -6,6 +6,8 @@ import dev.prayog.contracts.OrderType;
 import dev.prayog.contracts.Side;
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.contracts.event.OrderAccepted;
+import dev.prayog.contracts.event.OrderCancelled;
+import dev.prayog.contracts.event.OrderModified;
 import dev.prayog.contracts.event.Trade;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,12 +19,15 @@ import net.jqwik.api.Combinators;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
+import net.jqwik.api.Tuple;
 
 /**
- * Property tests: jqwik generates thousands of random order flows and checks that rules hold for every one. When a
+ * Property tests: jqwik generates thousands of random command flows and checks that rules hold for every one. When a
  * check fails, jqwik shrinks the flow to the shortest one that still fails and prints it.
  *
- * <p>Prices are drawn from a narrow range so orders cross often and most flows produce trades.
+ * <p>Prices are drawn from only 7 ticks so orders cross often, queues are long, and many modifies keep their price
+ * (the reduce-in-place path). Cancels and modifies aim at low order IDs so
+ * most of them hit a real order.
  */
 class MatchingEnginePropertiesTest {
 
@@ -32,115 +37,145 @@ class MatchingEnginePropertiesTest {
     private static final long T0 = 1_790_000_000_000_000L;
 
     @Property
-    void bookIsNeverCrossedAndStaysConsistent(@ForAll("orderFlows") List<NewOrder> flow) {
-        List<ExchangeEvent> events = new ArrayList<>();
-        MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
+    void bookIsNeverCrossedAndStaysConsistent(@ForAll("flows") List<Command> flow) {
+        MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), e -> {});
         OrderBook book = engine.book(ABC);
-        for (NewOrder order : flow) {
-            engine.submit(order, T0);
+        for (Command command : flow) {
+            engine.apply(command);
             book.checkInvariants(); // includes best bid < best ask
         }
     }
 
+    /** For every order: ordered = filled + still open + cancelled, where "ordered" follows modifies. */
     @Property
-    void quantityIsConserved(@ForAll("orderFlows") List<NewOrder> flow) {
-        List<ExchangeEvent> events = run(flow);
-        OrderBook book = lastBook;
-
-        Map<Long, Long> filled = new HashMap<>();
-        for (ExchangeEvent event : events) {
-            if (event instanceof Trade t) {
-                filled.merge(t.buyOrderId(), t.quantity(), Long::sum);
-                filled.merge(t.sellOrderId(), t.quantity(), Long::sum);
-            }
-        }
+    void quantityIsConserved(@ForAll("flows") List<Command> flow) {
+        Run run = run(flow);
+        Map<Long, Long> ordered = new HashMap<>();
+        Map<Long, Long> done = new HashMap<>();
         long bought = 0;
         long sold = 0;
-        for (ExchangeEvent event : events) {
-            if (event instanceof OrderAccepted a) {
-                long done = filled.getOrDefault(a.orderId(), 0L);
-                assertThat(done + book.leavesQuantity(a.orderId()))
-                        .as("order %d: filled + open == ordered", a.orderId())
-                        .isEqualTo(a.quantity());
-                if (a.side() == Side.BUY) {
-                    bought += done;
-                } else {
-                    sold += done;
+        for (ExchangeEvent event : run.events) {
+            switch (event) {
+                case OrderAccepted a -> ordered.put(a.orderId(), a.quantity());
+                case OrderModified m -> ordered.put(m.orderId(), m.quantity());
+                case OrderCancelled c -> done.merge(c.orderId(), c.cancelledQuantity(), Long::sum);
+                case Trade t -> {
+                    done.merge(t.buyOrderId(), t.quantity(), Long::sum);
+                    done.merge(t.sellOrderId(), t.quantity(), Long::sum);
+                    bought += t.quantity();
+                    sold += t.quantity();
                 }
+                default -> {}
             }
         }
-        assertThat(bought).as("every share bought was sold").isEqualTo(sold);
+        for (Map.Entry<Long, Long> order : ordered.entrySet()) {
+            long id = order.getKey();
+            assertThat(done.getOrDefault(id, 0L) + run.book.leavesQuantity(id))
+                    .as("order %d: filled + cancelled + open == ordered", id)
+                    .isEqualTo(order.getValue());
+        }
+        assertThat(bought).isEqualTo(sold);
     }
 
     @Property
-    void tradesHappenAtTheRestingPriceWithinBothLimits(@ForAll("orderFlows") List<NewOrder> flow) {
-        List<ExchangeEvent> events = run(flow);
-        Map<Long, OrderAccepted> accepted = new HashMap<>();
-        for (ExchangeEvent event : events) {
-            if (event instanceof OrderAccepted a) {
-                accepted.put(a.orderId(), a);
-            } else if (event instanceof Trade t) {
-                OrderAccepted buy = accepted.get(t.buyOrderId());
-                OrderAccepted sell = accepted.get(t.sellOrderId());
-                OrderAccepted passive = t.aggressorSide() == Side.BUY ? sell : buy;
-                assertThat(t.price()).isEqualTo(passive.price());
-                assertThat(t.price()).isBetween(sell.price(), buy.price());
-                assertThat(t.quantity()).isPositive();
+    void tradesHappenAtTheRestingPriceWithinBothLimits(@ForAll("flows") List<Command> flow) {
+        Map<Long, Long> price = new HashMap<>(); // current limit; 0 = market order
+        for (ExchangeEvent event : run(flow).events) {
+            switch (event) {
+                case OrderAccepted a -> price.put(a.orderId(), a.price());
+                case OrderModified m -> price.put(m.orderId(), m.price());
+                case Trade t -> {
+                    long buy = price.get(t.buyOrderId());
+                    long sell = price.get(t.sellOrderId());
+                    long passive = t.aggressorSide() == Side.BUY ? sell : buy;
+                    assertThat(t.price()).isEqualTo(passive);
+                    if (buy != 0) {
+                        assertThat(t.price()).isLessThanOrEqualTo(buy);
+                    }
+                    if (sell != 0) {
+                        assertThat(t.price()).isGreaterThanOrEqualTo(sell);
+                    }
+                    assertThat(t.quantity()).isPositive();
+                }
+                default -> {}
             }
         }
     }
 
     @Property
-    void sequenceNumbersAreGapFree(@ForAll("orderFlows") List<NewOrder> flow) {
-        List<ExchangeEvent> events = run(flow);
+    void marketOrdersNeverRest(@ForAll("flows") List<Command> flow) {
+        Run run = run(flow);
+        run.events.stream()
+                .filter(e -> e instanceof OrderAccepted a && a.orderType() == OrderType.MARKET)
+                .forEach(e -> assertThat(run.book.leavesQuantity(((OrderAccepted) e).orderId()))
+                        .isZero());
+    }
+
+    @Property
+    void sequenceNumbersAreGapFree(@ForAll("flows") List<Command> flow) {
+        List<ExchangeEvent> events = run(flow).events;
         for (int i = 0; i < events.size(); i++) {
             assertThat(events.get(i).seq()).isEqualTo(i + 1L);
         }
     }
 
     @Property
-    void sameInputsGiveSameEvents(@ForAll("orderFlows") List<NewOrder> flow) {
-        assertThat(run(flow)).isEqualTo(run(flow));
+    void sameInputsGiveSameEvents(@ForAll("flows") List<Command> flow) {
+        assertThat(run(flow).events).isEqualTo(run(flow).events);
     }
 
     @Property
-    void matchesTheReferenceMatcher(@ForAll("orderFlows") List<NewOrder> flow) {
+    void matchesTheReferenceMatcher(@ForAll("flows") List<Command> flow) {
         ReferenceMatcher reference = new ReferenceMatcher(Map.of(ABC, INSTRUMENT));
-        for (NewOrder order : flow) {
-            reference.submit(order, T0);
-        }
-        assertThat(run(flow)).isEqualTo(reference.events);
+        reference.apply(new ClockTick(T0));
+        flow.forEach(reference::apply);
+        assertThat(run(flow).events).isEqualTo(reference.events);
     }
 
-    private OrderBook lastBook;
+    private record Run(List<ExchangeEvent> events, OrderBook book) {}
 
-    private List<ExchangeEvent> run(List<NewOrder> flow) {
+    private static Run run(List<Command> flow) {
         List<ExchangeEvent> events = new ArrayList<>();
         MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
-        for (NewOrder order : flow) {
-            engine.submit(order, T0);
-        }
-        lastBook = engine.book(ABC);
-        return events;
+        engine.apply(new ClockTick(T0));
+        flow.forEach(engine::apply);
+        return new Run(events, engine.book(ABC));
     }
 
-    /** Mostly valid limit orders around 100.00 rupees, with about one in ten invalid. */
+    /** Mostly limit orders around 100.00 rupees, plus market orders, cancels, modifies, ticks and a few bad inputs. */
     @Provide
-    Arbitrary<List<NewOrder>> orderFlows() {
-        Arbitrary<NewOrder> valid = Combinators.combine(
-                        Arbitraries.longs().between(1, 4),
-                        Arbitraries.of(Side.class),
-                        Arbitraries.longs().between(1_990, 2_010).map(ticks -> ticks * TICK),
-                        Arbitraries.longs().between(1, 50))
-                .as((account, side, price, qty) ->
-                        new NewOrder("c-" + account, account, ABC, side, OrderType.LIMIT, price, qty));
-        Arbitrary<NewOrder> invalid = Arbitraries.of(
+    Arbitrary<List<Command>> flows() {
+        Arbitrary<Long> account = Arbitraries.longs().between(1, 4);
+        Arbitrary<Long> price = Arbitraries.longs().between(1_997, 2_003).map(ticks -> ticks * TICK);
+        Arbitrary<Long> quantity = Arbitraries.longs().between(1, 50);
+        Arbitrary<Long> orderId = Arbitraries.longs().between(1, 60);
+
+        Arbitrary<Command> limit = Combinators.combine(account, Arbitraries.of(Side.class), price, quantity)
+                .as((a, side, p, q) -> new NewOrder("c-" + a, a, ABC, side, OrderType.LIMIT, p, q));
+        Arbitrary<Command> market = Combinators.combine(account, Arbitraries.of(Side.class), quantity)
+                .as((a, side, q) -> new NewOrder("m-" + a, a, ABC, side, OrderType.MARKET, 0, q));
+        Arbitrary<Command> cancel =
+                Combinators.combine(account, orderId).as((a, id) -> new CancelOrder("x-" + id, a, ABC, id));
+        Arbitrary<Command> modify = Combinators.combine(account, orderId, price, quantity)
+                .as((a, id, p, q) -> new ModifyOrder("x-" + id, a, ABC, id, p, q));
+        Arbitrary<Command> tick = Arbitraries.longs().between(0, 1_000_000).map(dt -> new ClockTick(T0 + dt));
+        Arbitrary<Command> invalid = Arbitraries.of(
                 new NewOrder("bad-symbol", 1, "ZZZ", Side.BUY, OrderType.LIMIT, 10_000, 1),
                 new NewOrder("bad-qty", 1, ABC, Side.BUY, OrderType.LIMIT, 10_000, 0),
                 new NewOrder("too-big", 1, ABC, Side.SELL, OrderType.LIMIT, 10_000, 1_001),
                 new NewOrder("bad-price", 1, ABC, Side.SELL, OrderType.LIMIT, 0, 1),
-                new NewOrder("off-tick", 1, ABC, Side.BUY, OrderType.LIMIT, 10_001, 1));
-        return Arbitraries.frequencyOf(net.jqwik.api.Tuple.of(9, valid), net.jqwik.api.Tuple.of(1, invalid))
+                new NewOrder("off-tick", 1, ABC, Side.BUY, OrderType.LIMIT, 10_001, 1),
+                new NewOrder("priced-market", 1, ABC, Side.BUY, OrderType.MARKET, 10_000, 1),
+                new ModifyOrder("bad-modify", 1, ABC, 1, 10_001, 5),
+                new CancelOrder("bad-cancel", 1, "ZZZ", 1));
+
+        return Arbitraries.frequencyOf(
+                        Tuple.of(50, limit),
+                        Tuple.of(8, market),
+                        Tuple.of(14, cancel),
+                        Tuple.of(14, modify),
+                        Tuple.of(6, tick),
+                        Tuple.of(8, invalid))
                 .list()
                 .ofMaxSize(200);
     }

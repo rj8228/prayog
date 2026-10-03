@@ -1,0 +1,64 @@
+package dev.prayog.exchange.core;
+
+import dev.prayog.contracts.OrderType;
+import dev.prayog.contracts.Side;
+import dev.prayog.contracts.event.ExchangeEvent;
+import dev.prayog.contracts.event.OrderAccepted;
+import java.util.ArrayList;
+import java.util.List;
+
+/** An engine with one instrument (ABC, tick 5 paise), clock set to {@link #T0}, and every event collected. */
+final class EngineFixture {
+
+    static final long T0 = 1_790_000_000_000_000L;
+    static final String ABC = "ABC";
+    static final Instrument INSTRUMENT = new Instrument(ABC, 5, 1_000_000);
+
+    final List<ExchangeEvent> events = new ArrayList<>();
+    final MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
+    final OrderBook book = engine.book(ABC);
+
+    EngineFixture() {
+        engine.apply(new ClockTick(T0));
+    }
+
+    void apply(Command command) {
+        engine.apply(command);
+    }
+
+    /** Places a limit order and returns its order ID (0 if rejected). */
+    long limit(long account, Side side, long price, long quantity) {
+        return place(new NewOrder("c-" + account, account, ABC, side, OrderType.LIMIT, price, quantity));
+    }
+
+    long market(long account, Side side, long quantity) {
+        return place(new NewOrder("m-" + account, account, ABC, side, OrderType.MARKET, 0, quantity));
+    }
+
+    void cancel(long account, long orderId) {
+        apply(new CancelOrder("x-" + orderId, account, ABC, orderId));
+    }
+
+    void modify(long account, long orderId, long price, long quantity) {
+        apply(new ModifyOrder("x-" + orderId, account, ABC, orderId, price, quantity));
+    }
+
+    /** Events produced after {@code mark} (an earlier {@code events.size()}). */
+    List<ExchangeEvent> since(int mark) {
+        return List.copyOf(events.subList(mark, events.size()));
+    }
+
+    <T extends ExchangeEvent> List<T> all(Class<T> type) {
+        return events.stream().filter(type::isInstance).map(type::cast).toList();
+    }
+
+    private long place(NewOrder order) {
+        int mark = events.size();
+        apply(order);
+        return since(mark).stream()
+                .filter(OrderAccepted.class::isInstance)
+                .map(e -> ((OrderAccepted) e).orderId())
+                .findFirst()
+                .orElse(0L);
+    }
+}

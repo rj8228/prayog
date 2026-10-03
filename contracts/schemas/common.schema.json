@@ -55,7 +55,7 @@
       ]
     },
     "cancelReason": {
-      "enum": ["CLIENT_REQUEST", "SELF_TRADE_PREVENTION", "NO_LIQUIDITY", "MODIFIED_TO_ZERO", "KILL_SWITCH"]
+      "enum": ["CLIENT_REQUEST", "SELF_TRADE_PREVENTION", "NO_LIQUIDITY", "MODIFIED_TO_ZERO", "KILL_SWITCH", "EXPIRED"]
     },
     "priceLevel": {
       "type": "object",

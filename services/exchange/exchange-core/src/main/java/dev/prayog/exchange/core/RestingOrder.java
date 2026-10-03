@@ -12,17 +12,21 @@ final class RestingOrder {
     final long accountId;
     final Side side;
     final long price;
+    /** Total ordered, including what has filled (changed by modify). */
+    long quantity;
+    /** Still open on the book. {@code quantity - leavesQuantity} is the filled amount. */
     long leavesQuantity;
 
     PriceLevel level;
     RestingOrder prev;
     RestingOrder next;
 
-    RestingOrder(long orderId, long accountId, Side side, long price, long leavesQuantity) {
+    RestingOrder(long orderId, long accountId, Side side, long price, long quantity, long leavesQuantity) {
         this.orderId = orderId;
         this.accountId = accountId;
         this.side = side;
         this.price = price;
+        this.quantity = quantity;
         this.leavesQuantity = leavesQuantity;
     }
 }
