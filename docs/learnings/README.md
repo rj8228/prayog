@@ -6,7 +6,7 @@ What I learned building Prayog, session by session: the functional side (how exc
 - **Concepts**: each one has a checkbox. I tick it once I can explain it without notes.
 - **In an interview**: a one- or two-sentence answer I could give out loud.
 
-The longer background reading lives in [`docs/overview/functional.html`](../overview/functional.html) and [`docs/overview/technical.html`](../overview/technical.html). The decisions themselves live in [`docs/adr/`](../adr/).
+The longer background reading lives in [`docs/overview/functional.html`](../overview/functional.html), [`docs/overview/technical.html`](../overview/technical.html) and [`docs/overview/ring-buffer.html`](../overview/ring-buffer.html) (with an interactive simulator). The decisions themselves live in [`docs/adr/`](../adr/).
 
 ## Index
 

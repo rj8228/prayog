@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ring Buffer Explained</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #5f5e5a; --line: #e3e1db; --card: #ffffff;
+    --accent: #2f5d8a; --code-bg: #f2f0eb; --hot: #b3402e;
+    --s-written: #e0b04a; --s-matched: #2f5d8a; --s-journal: #2e7d4f; --s-free: #d9d6cf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+      --accent: #8bb4dc; --code-bg: #22231f; --hot: #ef8a75;
+      --s-written: #e0b04a; --s-matched: #6f9fd0; --s-journal: #6fcf97; --s-free: #3a3b38;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151614; --fg: #e8e6e1; --muted: #a3a19b; --line: #2e2f2c; --card: #1d1e1c;
+    --accent: #8bb4dc; --code-bg: #22231f; --hot: #ef8a75;
+    --s-written: #e0b04a; --s-matched: #6f9fd0; --s-journal: #6fcf97; --s-free: #3a3b38;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; max-width: 1160px; margin: 0 auto; padding: 32px 16px; }
+  nav { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
+  nav a:hover { color: var(--accent); }
+  main { min-width: 0; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 24px; margin: 52px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  p, li { max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 18px; }
+  a { color: var(--accent); }
+  code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  pre code { padding: 0; background: none; }
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 14px; background: var(--card); margin: 16px 0; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps > li { counter-increment: s; position: relative; padding: 10px 12px 10px 48px; border-bottom: 1px solid var(--line); max-width: none; }
+  .steps > li::before { content: counter(s); position: absolute; left: 8px; top: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--bg); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  svg { max-width: 100%; height: auto; display: block; margin: 12px 0; }
+  svg text { fill: var(--fg); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  svg .muted { fill: var(--muted); }
+  svg .small { font-size: 10.5px; }
+  svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  svg .line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  /* simulator */
+  .sim { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px 0; }
+  .sim-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .sim-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .sim button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+  .sim button:hover { border-color: var(--accent); }
+  .sim button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .sim .group-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; width: 100%; margin-top: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  .cursors { font-size: 14px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 10px; }
+  .cursors dt { color: var(--muted); }
+  .cursors dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .log { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; height: 210px; overflow-y: auto; }
+  .log .busy { color: var(--hot); font-weight: 700; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav { position: static; border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 16px; }
+    .sim-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#kitchen">2. A business example</a>
+  <a href="#why">3. Why not a queue or locks?</a>
+  <a href="#how">4. How the ring works</a>
+  <a href="#sim">5. Try it</a>
+  <a href="#prayog">6. The ring in Prayog</a>
+  <a href="#walk">7. One order, end to end</a>
+  <a href="#faq">8. Questions</a>
+  <a href="#glossary">9. Glossary</a>
+</nav>
+<main>
+<h1>The ring buffer, explained</h1>
+<p class="lede">How Prayog turns thousands of orders arriving at once from many places into one official, fair, replayable order of events, without a single lock. First a business example, then how it works, then exactly how Prayog uses it.</p>
+
+<h2 id="problem">1. The problem it solves</h2>
+<p>Orders reach the exchange from many directions at the same instant: hundreds of bots, a few humans in the web terminal, the clock ticking every 100 ms, an ops person pressing "halt". Each of these runs on its own thread.</p>
+<p>But the order book must be changed by <strong>one thread only</strong>:</p>
+<ul>
+  <li><strong>Fairness:</strong> "first come, first served" only means something if there is <em>one</em> official order of arrival.</li>
+  <li><strong>Speed:</strong> one thread needs no locks. Locks are slow even when uncontended, and much slower when threads fight over them.</li>
+  <li><strong>Replay:</strong> if we record that one order, we can rebuild the market exactly after a crash (S8).</li>
+</ul>
+<p>So we need something at the entrance that takes <em>many</em> writers and hands <em>one</em> reader a single, numbered line of work. That's the ring buffer. Prayog uses the LMAX Disruptor, a widely used Java implementation built by the LMAX exchange for exactly this.</p>
+
+<h2 id="kitchen">2. A business example: the restaurant ticket wheel</h2>
+<p>Picture a busy restaurant kitchen with a round <strong>ticket wheel</strong>: a ring of 8 numbered clips that rotates in front of the head chef.</p>
+<svg viewBox="0 0 860 330" role="img" aria-label="Kitchen analogy: waiters clip tickets onto a wheel of eight clips; the head chef takes them in order; the expediter checks plates behind the chef; the runner serves behind the expediter; a clip is reused only after the runner has finished with it.">
+  <defs><marker id="k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="box" x="20" y="40" width="150" height="40" rx="8"/><text x="95" y="65" text-anchor="middle">Waiter 1</text>
+  <rect class="box" x="20" y="100" width="150" height="40" rx="8"/><text x="95" y="125" text-anchor="middle">Waiter 2</text>
+  <rect class="box" x="20" y="160" width="150" height="40" rx="8"/><text x="95" y="185" text-anchor="middle">Waiter 3</text>
+  <text x="95" y="230" text-anchor="middle" class="muted small">many writers at once</text>
+  <g transform="translate(400,160)">
+    <circle r="110" style="fill:none;stroke:var(--line);stroke-width:2"/>
+    <g id="clips"></g>
+    <text y="-6" text-anchor="middle">Ticket wheel</text>
+    <text y="12" text-anchor="middle" class="muted small">8 numbered clips, reused</text>
+  </g>
+  <path class="line" d="M170,60 C 230,60 250,110 292,130" marker-end="url(#k)"/>
+  <path class="line" d="M170,120 H288" marker-end="url(#k)"/>
+  <path class="line" d="M170,180 C 230,180 250,170 292,165" marker-end="url(#k)"/>
+  <rect class="box" x="600" y="40" width="240" height="44" rx="8"/><text x="720" y="60" text-anchor="middle">Head chef</text><text x="720" y="75" text-anchor="middle" class="muted small">cooks tickets strictly in clip order</text>
+  <rect class="box" x="600" y="120" width="240" height="44" rx="8"/><text x="720" y="140" text-anchor="middle">Expediter</text><text x="720" y="155" text-anchor="middle" class="muted small">checks each plate after the chef</text>
+  <rect class="box" x="600" y="200" width="240" height="44" rx="8"/><text x="720" y="220" text-anchor="middle">Runner</text><text x="720" y="235" text-anchor="middle" class="muted small">serves after the expediter</text>
+  <path class="line" d="M510,140 C 560,120 570,70 600,62" marker-end="url(#k)"/>
+  <path class="line" d="M720,84 V120" marker-end="url(#k)"/>
+  <path class="line" d="M720,164 V200" marker-end="url(#k)"/>
+  <text x="20" y="300" class="muted small">A clip is freed only after the runner is done with it. All 8 clips busy? Waiters must wait, or tell guests "the kitchen is full".</text>
+</svg>
+<script>
+  // Draw the eight clips of the kitchen wheel.
+  (function () {
+    const g = document.getElementById("clips");
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * 2 * Math.PI - Math.PI / 2;
+      const x = Math.cos(a) * 110, y = Math.sin(a) * 110;
+      g.insertAdjacentHTML("beforeend",
+        `<circle cx="${x}" cy="${y}" r="16" style="fill:var(--card);stroke:var(--accent);stroke-width:1.5"/>` +
+        `<text x="${x}" y="${y + 4}" text-anchor="middle" class="small">${i + 1}</text>`);
+    }
+  })();
+</script>
+<div class="table-wrap"><table>
+  <tr><th>In the kitchen</th><th>What it means</th><th>In Prayog</th></tr>
+  <tr><td>Waiters clip tickets on the next free clip</td><td>Many writers; each grabs the next position, and two waiters never get the same clip</td><td>Gateway threads, the clock, ops call <code>submit</code> / <code>trySubmit</code></td></tr>
+  <tr><td>Clips are numbered and reused: ticket 9 goes on clip 1 again</td><td>A fixed number of slots; ticket <em>n</em> uses clip <em>n</em> mod 8</td><td>65,536 pre-allocated <code>CommandSlot</code>s</td></tr>
+  <tr><td>The head chef cooks strictly in clip order</td><td>One reader decides the official order of work</td><td>The matching thread applies each command to the engine and numbers it</td></tr>
+  <tr><td>The expediter checks a plate only after the chef has cooked it</td><td>A second reader follows <em>behind</em> the first and never overtakes it</td><td>The journal writes each command and its events to disk after matching (S8)</td></tr>
+  <tr><td>The runner serves only checked plates</td><td>A third reader follows the second</td><td>Publishers send responses and market data only after the journal (durable first, announce second)</td></tr>
+  <tr><td>A clip is freed once the runner is done</td><td>The slowest reader decides when a slot can be reused</td><td>A slot is overwritten only after every stage has passed it</td></tr>
+  <tr><td>All clips full → "kitchen is full, please wait"</td><td>Bounded capacity: overload is refused, not hidden</td><td><code>trySubmit</code> returns false → gateway answers "busy" (back-pressure)</td></tr>
+</table></div>
+<p>Notice what the kitchen <em>doesn't</em> have: no manager taking a lock on the whole wheel each time a waiter clips a ticket, and no new clips being made for every order. That's exactly why the design is fast.</p>
+
+<h2 id="why">3. Why not a normal queue, or locks?</h2>
+<div class="table-wrap"><table>
+  <tr><th>Approach</th><th>How it works</th><th>Cost per order</th><th>Problems</th></tr>
+  <tr><td>Lock the order book</td><td>Every thread takes a lock, changes the book, releases</td><td>A lock acquire + release; threads queue for it under load</td><td>Slow under contention; arrival order depends on who wins the lock race, so there is no clean recorded order</td></tr>
+  <tr><td><code>LinkedBlockingQueue</code></td><td>Writers <code>put</code>, one reader <code>take</code>s</td><td>A new node object per message + a lock on put and take</td><td>Garbage for the collector to clean; lock contention; no built-in way to chain later stages</td></tr>
+  <tr><td><code>ArrayBlockingQueue</code></td><td>Fixed array, but one lock for both ends</td><td>A lock per operation</td><td>Contention between writers and the reader; still one consumer stage</td></tr>
+  <tr><td><strong>Ring buffer (Disruptor)</strong></td><td>Fixed array of reusable slots; writers claim positions with an atomic counter; readers follow with their own counters</td><td>A few atomic operations; <strong>no lock, no new objects</strong></td><td>More concepts to learn; capacity is fixed up front (by design)</td></tr>
+</table></div>
+<p class="note">LMAX publicly reported the Disruptor handling millions of messages per second on one thread with much lower and steadier latency than queues. Prayog doesn't need that speed. We use it because it gives us <strong>one official order, pipeline stages and back-pressure</strong> in one well-tested piece.</p>
+
+<h2 id="how">4. How the ring works</h2>
+<h3>Sequence numbers, not positions</h3>
+<p>Everything is counted with ever-increasing <strong>sequence numbers</strong> (1, 2, 3, …, millions). They never wrap. The slot for sequence <em>s</em> is <code>s mod size</code>. Because the size is a power of two (8, 1,024, 65,536), "mod" is a single bit operation: <code>s &amp; (size − 1)</code>. That's why the ring size must be a power of two.</p>
+<svg viewBox="0 0 860 225" role="img" aria-label="A ring of eight slots drawn flat. Sequences 9 to 16 occupy slots 1 to 8. The producer cursor is at 16, matching at 13, the journal at 11, publishers at 10. Producers may not claim beyond sequence 18, which is the slowest consumer plus eight.">
+  <g id="flat"></g>
+  <text x="20" y="210" class="muted small">The producer may claim up to (slowest reader + 8) = 18. Claiming 19 would overwrite slot 3 while publishers still need sequence 11 there.</text>
+</svg>
+<script>
+  (function () {
+    const g = document.getElementById("flat");
+    const css = (v) => `var(${v})`;
+    const pub = 10, jou = 11, mat = 13, prod = 16;
+    for (let i = 0; i < 8; i++) {
+      const seq = 9 + i, x = 40 + i * 95;
+      let fill = "--s-free";
+      if (seq <= pub) fill = "--s-free"; else if (seq <= jou) fill = "--s-journal"; else if (seq <= mat) fill = "--s-matched"; else if (seq <= prod) fill = "--s-written";
+      g.insertAdjacentHTML("beforeend",
+        `<rect x="${x}" y="40" width="80" height="50" rx="6" style="fill:${css(fill)};opacity:.85;stroke:var(--line)"/>` +
+        `<text x="${x + 40}" y="62" text-anchor="middle">seq ${seq}</text>` +
+        `<text x="${x + 40}" y="80" text-anchor="middle" class="small">slot ${((seq - 1) % 8) + 1}</text>`);
+    }
+    const mark = (seq, label, y) => {
+      const x = 40 + (seq - 9) * 95 + 40;
+      g.insertAdjacentHTML("beforeend",
+        `<line x1="${x}" y1="${y}" x2="${x}" y2="94" style="stroke:var(--fg);stroke-width:1.5"/>` +
+        `<text x="${x}" y="${y + 12}" text-anchor="middle" class="small">${label}</text>`);
+    };
+    mark(prod, "producers ▸ 16", 110); mark(mat, "matching ▸ 13", 128); mark(jou, "journal ▸ 11", 146); mark(pub, "publishers ▸ 10", 164);
+    g.insertAdjacentHTML("beforeend", `<text x="20" y="25" class="muted small">The same 8 slots drawn flat. Colour = which stages have finished with that sequence.</text>`);
+  })();
+</script>
+<h3>Writing (producers)</h3>
+<ol class="steps">
+  <li><strong>Claim.</strong> A producer atomically increases the shared "claimed" counter (a compare-and-swap). Two threads can never get the same sequence. Before claiming, it checks that the slot is free: <code>claim − slowest reader ≤ size</code>. If not, <code>trySubmit</code> gives up and returns false, while <code>submit</code> waits.</li>
+  <li><strong>Write.</strong> It copies the command into that slot. The slot object already exists, created once at startup, so nothing is allocated.</li>
+  <li><strong>Publish.</strong> It marks the sequence as available. Readers can now see it. Publishing uses a memory barrier so other threads see the fully written slot, never a half-written one.</li>
+</ol>
+<h3>Reading (consumers)</h3>
+<ol class="steps">
+  <li>Each reader keeps its own counter, "the last sequence I finished". The matching handler waits for producers; the journal waits for matching; publishers wait for the journal. These dependencies form the <strong>pipeline</strong>.</li>
+  <li>A reader that has nothing to do waits using its <strong>wait strategy</strong>: sleep until woken (<code>BLOCKING</code>, low CPU), spin then yield (<code>YIELDING</code>), or spin forever on its own core (<code>BUSY_SPIN</code>, lowest latency).</li>
+  <li>When a reader falls behind, it finds <em>many</em> ready slots and processes them as a <strong>batch</strong>, without waiting in between. The last one is flagged <code>endOfBatch</code>. The journal uses that flag to flush the disk once for the whole batch (group commit), so a slow disk gets <em>more efficient</em> under load, not less.</li>
+</ol>
+<h3>Why it's fast (the short version)</h3>
+<ul>
+  <li><strong>No locks:</strong> just atomic counters, each written by one thread.</li>
+  <li><strong>No garbage:</strong> slots are reused forever.</li>
+  <li><strong>CPU-cache friendly:</strong> slots sit next to each other in memory, and the Disruptor pads its counters so two threads' counters never share a cache line ("false sharing").</li>
+</ul>
+
+<h2 id="sim">5. Try it: a ring of 8 slots</h2>
+<p>Submit commands, then advance each stage. Watch the colours move round the ring, and try filling it to see back-pressure. Sequence numbers keep growing while slots are reused.</p>
+<div class="sim" id="simulator">
+  <div class="sim-grid">
+    <div>
+      <svg viewBox="-150 -150 300 300" id="ring" role="img" aria-label="Interactive ring of eight slots"></svg>
+      <div class="legend">
+        <span style="--c:var(--s-free)">free</span>
+        <span style="--c:var(--s-written)">written, waiting for matching</span>
+        <span style="--c:var(--s-matched)">matched</span>
+        <span style="--c:var(--s-journal)">journaled</span>
+      </div>
+    </div>
+    <div>
+      <div class="sim-controls">
+        <div class="group-label">Producers (many threads)</div>
+        <button data-act="order">Bot sends an order</button>
+        <button data-act="tick">Clock sends a tick</button>
+        <button data-act="burst">Burst of 5 orders</button>
+        <div class="group-label">Consumers (one thread each, in order)</div>
+        <button data-act="match">Matching: next</button>
+        <button data-act="journal">Journal: next</button>
+        <button data-act="publish">Publishers: next</button>
+        <div class="group-label">Play</div>
+        <button data-act="auto" class="primary" id="autoBtn">Auto-run</button>
+        <button data-act="slowdisk" id="diskBtn">Slow disk: off</button>
+        <button data-act="reset">Reset</button>
+      </div>
+      <dl class="cursors" id="cursors"></dl>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const N = 8;
+  let claimed, matched, journaled, published, slots, orders, auto = null, slowDisk = false;
+  const ring = document.getElementById("ring"), log = document.getElementById("log"), cursors = document.getElementById("cursors");
+
+  function reset() {
+    claimed = 0; matched = 0; journaled = 0; published = 0; orders = 0;
+    slots = Array.from({ length: N }, () => null);
+    log.innerHTML = "";
+    say("Empty ring of " + N + " slots. All counters at 0.");
+    draw();
+  }
+  function say(text, cls) {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = text;
+    log.prepend(line);
+  }
+  function submit(label) {
+    if (claimed - published >= N) {
+      say("RING FULL: trySubmit → false. Gateway answers \"busy\" (" + label + " refused).", "busy");
+      return false;
+    }
+    claimed++;
+    slots[(claimed - 1) % N] = { seq: claimed, label };
+    say("Producer claimed seq " + claimed + " → slot " + (((claimed - 1) % N) + 1) + ": " + label);
+    return true;
+  }
+  function step(stage) {
+    if (stage === "match") {
+      if (matched >= claimed) return say("Matching: nothing new to process (waits).");
+      matched++;
+      const s = slots[(matched - 1) % N];
+      say("Matching: input #" + matched + " applied (" + s.label + "), events written into the slot.");
+    } else if (stage === "journal") {
+      if (journaled >= matched) return say("Journal: waits for matching (never overtakes it).");
+      const batch = matched - journaled;
+      journaled = matched;
+      say("Journal: wrote " + batch + " slot(s), one fsync for the batch (up to seq " + journaled + ").");
+    } else if (stage === "publish") {
+      if (published >= journaled) return say("Publishers: wait for the journal (durable first).");
+      published++;
+      say("Publishers: sent response + market data for seq " + published + ". Slot " + (((published - 1) % N) + 1) + " is free again.");
+    }
+  }
+  function draw() {
+    let svg = '<circle r="118" style="fill:none;stroke:var(--line);stroke-width:2"/>';
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * 2 * Math.PI - Math.PI / 2;
+      const x = Math.cos(a) * 100, y = Math.sin(a) * 100;
+      const s = slots[i];
+      let fill = "--s-free", top = "slot " + (i + 1), sub = "";
+      if (s && s.seq > published) {
+        fill = s.seq <= journaled ? "--s-journal" : s.seq <= matched ? "--s-matched" : "--s-written";
+      }
+      if (s) { sub = "seq " + s.seq; }
+      svg += `<circle cx="${x}" cy="${y}" r="30" style="fill:var(${fill});stroke:var(--line);stroke-width:1.5;opacity:.9"/>` +
+        `<text x="${x}" y="${y - 3}" text-anchor="middle" class="small">${top}</text>` +
+        `<text x="${x}" y="${y + 11}" text-anchor="middle" class="small">${sub}</text>`;
+    }
+    const used = claimed - published;
+    svg += `<text y="-6" text-anchor="middle">${used} / ${N} in use</text>` +
+      `<text y="12" text-anchor="middle" class="muted small">${used >= N ? "FULL" : "room for " + (N - used)}</text>`;
+    ring.innerHTML = svg;
+    cursors.innerHTML =
+      `<dt>Producers claimed</dt><dd>${claimed}</dd><dt>Matching done</dt><dd>${matched}</dd>` +
+      `<dt>Journal done</dt><dd>${journaled}</dd><dt>Publishers done</dt><dd>${published}</dd>`;
+  }
+  function act(a) {
+    if (a === "order") submit("order #" + (++orders));
+    else if (a === "tick") submit("clock tick");
+    else if (a === "burst") { for (let i = 0; i < 5; i++) if (!submit("order #" + (++orders))) break; }
+    else if (a === "match" || a === "journal" || a === "publish") step(a);
+    else if (a === "reset") { stopAuto(); reset(); return; }
+    else if (a === "slowdisk") {
+      slowDisk = !slowDisk;
+      document.getElementById("diskBtn").textContent = "Slow disk: " + (slowDisk ? "on" : "off");
+      say(slowDisk ? "Disk slowed down: the journal falls behind, the ring fills up." : "Disk back to normal.");
+    }
+    else if (a === "auto") { auto ? stopAuto() : startAuto(); return; }
+    draw();
+  }
+  function startAuto() {
+    document.getElementById("autoBtn").textContent = "Pause";
+    auto = setInterval(() => {
+      const r = Math.random();
+      if (r < 0.42) submit(Math.random() < 0.8 ? "order #" + (++orders) : "clock tick");
+      else if (r < 0.64) step("match");
+      else if (r < 0.82) { if (!slowDisk || Math.random() < 0.15) step("journal"); }
+      else step("publish");
+      draw();
+    }, 650);
+  }
+  function stopAuto() {
+    if (auto) clearInterval(auto);
+    auto = null;
+    document.getElementById("autoBtn").textContent = "Auto-run";
+  }
+  document.querySelectorAll("#simulator button").forEach((b) => b.addEventListener("click", () => act(b.dataset.act)));
+  reset();
+})();
+</script>
+<p><strong>Things to try:</strong> press "Burst of 5" twice: the second burst is refused partway, which is back-pressure. Then advance only Matching: it can run ahead, but Publishers can't pass the Journal. Turn on "Slow disk" in auto-run and watch the ring fill up, then drain in batches.</p>
+
+<h2 id="prayog">6. The ring in Prayog</h2>
+<svg viewBox="0 0 880 260" role="img" aria-label="Prayog pipeline: gateway threads, the clock ticker and ops publish into the Disruptor ring of 65,536 command slots. The matching thread numbers each command and applies it to the engine, writing events into the slot. Then the journal stage (S8), then publishers for responses and market data in parallel.">
+  <defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="box" x="10" y="20" width="150" height="40" rx="8"/><text x="85" y="45" text-anchor="middle">Gateway threads</text>
+  <rect class="box" x="10" y="80" width="150" height="40" rx="8"/><text x="85" y="105" text-anchor="middle">ClockTicker</text>
+  <rect class="box" x="10" y="140" width="150" height="40" rx="8"/><text x="85" y="165" text-anchor="middle">Ops</text>
+  <text x="85" y="205" text-anchor="middle" class="muted small">trySubmit / submit</text>
+  <rect x="210" y="60" width="160" height="80" rx="10" style="fill:var(--card);stroke:var(--hot);stroke-width:2"/>
+  <text x="290" y="92" text-anchor="middle">Disruptor ring</text><text x="290" y="110" text-anchor="middle" class="muted small">65,536 CommandSlots</text>
+  <path class="line" d="M160,40 C 190,40 190,80 210,85" marker-end="url(#p)"/>
+  <path class="line" d="M160,100 H210" marker-end="url(#p)"/>
+  <path class="line" d="M160,160 C 190,160 190,120 210,115" marker-end="url(#p)"/>
+  <rect x="410" y="60" width="160" height="80" rx="10" style="fill:var(--card);stroke:var(--hot);stroke-width:2"/>
+  <text x="490" y="88" text-anchor="middle">MatchingHandler</text><text x="490" y="106" text-anchor="middle" class="muted small">inputSeq = ++n</text><text x="490" y="121" text-anchor="middle" class="muted small">engine.apply(command)</text>
+  <path class="line" d="M370,100 H410" marker-end="url(#p)"/>
+  <rect class="box" x="610" y="60" width="120" height="80" rx="10"/>
+  <text x="670" y="92" text-anchor="middle">Journal</text><text x="670" y="110" text-anchor="middle" class="muted small">stage 1 · S8</text>
+  <path class="line" d="M570,100 H610" marker-end="url(#p)"/>
+  <rect class="box" x="760" y="30" width="110" height="50" rx="10"/><text x="815" y="52" text-anchor="middle">Responses</text><text x="815" y="68" text-anchor="middle" class="muted small">stage 2</text>
+  <rect class="box" x="760" y="120" width="110" height="50" rx="10"/><text x="815" y="142" text-anchor="middle">Market data</text><text x="815" y="158" text-anchor="middle" class="muted small">stage 2</text>
+  <path class="line" d="M730,90 L760,58" marker-end="url(#p)"/><path class="line" d="M730,110 L760,142" marker-end="url(#p)"/>
+  <text x="410" y="190" class="muted small">Red = the hot path (one thread, no I/O). Stages run strictly in order;</text>
+  <text x="410" y="206" class="muted small">handlers inside one stage run in parallel on their own threads.</text>
+</svg>
+<div class="table-wrap"><table>
+  <tr><th>Piece</th><th>File</th><th>Job</th></tr>
+  <tr><td><code>ExchangePipeline</code></td><td><code>exchange-core/…/pipeline/ExchangePipeline.java</code></td><td>Builds the Disruptor (<code>ProducerType.MULTI</code>, ring size and wait strategy from <code>PipelineConfig</code>), wires the stages, exposes <code>submit</code> and <code>trySubmit</code></td></tr>
+  <tr><td><code>CommandSlot</code></td><td><code>…/pipeline/CommandSlot.java</code></td><td>One reusable slot: the command, its input sequence and the events it produced</td></tr>
+  <tr><td><code>MatchingHandler</code></td><td>inside <code>ExchangePipeline</code></td><td>The single writer: clears the slot's events, sets <code>inputSeq = ++n</code>, calls <code>engine.apply</code>; the engine's events land in the slot</td></tr>
+  <tr><td><code>PipelineHandler</code></td><td><code>…/pipeline/PipelineHandler.java</code></td><td>Our interface for later stages (journal, publishers); gets <code>endOfBatch</code> for group commit</td></tr>
+  <tr><td><code>WaitStrategyType</code></td><td><code>…/pipeline/WaitStrategyType.java</code></td><td><code>BLOCKING</code> (default), <code>YIELDING</code>, <code>BUSY_SPIN</code></td></tr>
+  <tr><td><code>SimClock</code>, <code>ClockTicker</code></td><td><code>…/pipeline/</code></td><td>Wall time → sim time; a tick into the ring every 100 ms</td></tr>
+</table></div>
+<h3>Key choices (ADR 0006)</h3>
+<ul>
+  <li><strong>The input sequence is assigned by the matching thread</strong>, not by producers. If producers numbered commands, thread A could take 5 and thread B 6 while B publishes first. Then the numbers would disagree with what actually happened.</li>
+  <li><strong>The journal sits before the publishers.</strong> Nobody is told about a trade until it's on disk.</li>
+  <li><strong>Fail safe:</strong> if a handler throws, its thread stops, the ring fills and trading halts. Never skip a command.</li>
+  <li><strong>65,536 slots:</strong> enough to absorb bursts (seconds of peak traffic), small in memory, and a power of two.</li>
+</ul>
+
+<h2 id="walk">7. One order, end to end</h2>
+<p>A bot sends <code>BUY 10 ABC @ ₹100.05</code> while the clock thread is publishing a tick at the same moment.</p>
+<ol class="steps">
+  <li>The gateway thread calls <code>trySubmit(newOrder)</code>. It claims sequence 41,203, which maps to slot 41,203 &amp; 65,535 = 41,203, writes the command reference and publishes. Meanwhile the clock thread claims 41,204 for its tick. Neither waited for the other.</li>
+  <li>The matching thread, which has been waiting, sees 41,203 is available. It sets <code>inputSeq</code> to the next number (say 41,203), applies the order: accepted, one trade at ₹100.00. It writes two events into the slot's list.</li>
+  <li>It moves straight on to 41,204 (the tick) in the same batch, with no waiting between them.</li>
+  <li>The journal stage (S8) sees both, writes the two commands and their events, and calls fsync once because 41,204 is the end of the batch.</li>
+  <li>The publisher stages send the HTTP response to the bot and push the trade print and book update to WebSocket subscribers.</li>
+  <li>Once every stage has passed 41,203, its slot is free and will be reused by sequence 106,739 (41,203 + 65,536).</li>
+</ol>
+<p class="note">What the S7 test proves: 8 threads × 2,000 commands at once. Whatever order the ring produced, the input sequence has no gaps, each thread's own order is preserved, and replaying the recorded order through a fresh engine gives identical events. S8 makes that recorded order permanent, on disk.</p>
+
+<h2 id="faq">8. Questions</h2>
+<h3>What happens if matching is slower than producers?</h3>
+<p>The ring fills. <code>trySubmit</code> starts returning false, and the gateway answers 503 "busy". Clients back off, and nothing is lost, because nothing was accepted.</p>
+<h3>What if the journal (disk) is slow?</h3>
+<p>Matching can run ahead, but only until the ring is full, because slots aren't freed until the journal and the publishers pass them. Under load the journal sees bigger batches, so each fsync covers more commands.</p>
+<h3>Isn't one matching thread a bottleneck?</h3>
+<p>One thread can match millions of simple orders per second because it never waits for locks or I/O. When that's not enough, exchanges <em>shard</em>: symbols A–M on one ring and thread, N–Z on another. Prayog runs one shard for the MVP.</p>
+<h3>Why are the producers allowed to block in <code>submit</code>?</h3>
+<p>Only internal producers use it: a lost clock tick or a lost "halt" would be worse than a few milliseconds' wait. The gateway uses <code>trySubmit</code> so web threads never hang.</p>
+<h3>Do commands still allocate memory?</h3>
+<p>Yes. Our commands are Java records created by producers; only the slots are pre-allocated. Fully garbage-free designs write raw bytes into the slots. We'll consider that only if the S9 benchmarks show garbage collection hurting latency.</p>
+
+<h2 id="glossary">9. Glossary</h2>
+<div class="table-wrap"><table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Ring buffer</td><td>A fixed-size array used in a circle: position = sequence mod size</td></tr>
+  <tr><td>Sequence</td><td>An ever-increasing counter (1, 2, 3, …). Producers claim them; each consumer remembers the last one it finished</td></tr>
+  <tr><td>Producer / consumer</td><td>Writes into the ring / reads from it</td></tr>
+  <tr><td>Single writer</td><td>Only one thread changes a piece of state; here, the order books</td></tr>
+  <tr><td>Gating</td><td>A consumer may not pass the one it depends on; producers may not lap the slowest consumer</td></tr>
+  <tr><td>Back-pressure</td><td>Refusing new work when full, instead of queueing without limit</td></tr>
+  <tr><td>Wait strategy</td><td>How an idle consumer waits: block, yield or busy-spin</td></tr>
+  <tr><td>Batching / group commit</td><td>Processing many ready slots in one go; one fsync for the whole batch</td></tr>
+  <tr><td>Compare-and-swap (CAS)</td><td>A CPU instruction that updates a value only if it still has the expected old value. Lets threads claim sequences without a lock</td></tr>
+  <tr><td>Memory barrier</td><td>Makes writes by one thread visible to others in the right order, so readers never see a half-written slot</td></tr>
+  <tr><td>False sharing</td><td>Two threads' counters on the same CPU cache line slow each other down; the Disruptor pads them apart</td></tr>
+</table></div>
+
+<footer>Prayog · docs/overview/ring-buffer.html · Further reading: the LMAX Disruptor technical paper (lmax-exchange.github.io/disruptor), Martin Fowler's "The LMAX Architecture", ADR 0006. Companions: <a href="functional.html">functional overview</a>, <a href="technical.html">technical overview</a>.</footer>
+</main>
+</div>
+</body>
+</html>

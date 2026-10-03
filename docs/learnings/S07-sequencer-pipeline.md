@@ -5,7 +5,7 @@
 - **The clock:** a simulated clock with a speed multiplier and a ticker thread.
 - **The schedule:** the engine opens and closes the market from clock ticks.
 
-[ADR 0006](../adr/0006-sequencer-pipeline-and-clock.md).
+[ADR 0006](../adr/0006-sequencer-pipeline-and-clock.md). Explainer with a simulator: [ring-buffer.html](../overview/ring-buffer.html).
 
 ## Concepts
 

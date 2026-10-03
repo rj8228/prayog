@@ -247,6 +247,7 @@ FIX is the standard protocol between brokers and exchanges. Writing a FIX engine
 
 <h3 id="c-seq">5.2 Sequencer pipeline (Disruptor) <span class="tag mvp">MVP</span> S7</h3>
 <p><strong>What it does:</strong> turns many concurrent producers (gateway threads, the clock thread, ops) into one ordered stream for the matching thread.</p>
+<p class="note">New to ring buffers? <a href="ring-buffer.html">The ring buffer, explained</a> walks through a business example, the mechanics, an interactive simulator and Prayog's code.</p>
 <svg viewBox="0 0 900 200" role="img" aria-label="Disruptor ring: producers claim slots and publish; the matching handler consumes in order; journal and market data handlers follow behind it.">
   <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
   <text x="20" y="40">Producers</text><text x="20" y="58" class="muted small">gateway threads, clock, ops</text>
