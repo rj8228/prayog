@@ -35,4 +35,4 @@ Prayog is a simulated stock exchange and bot arena: simulated traders create the
 3. Implement in small steps with tests.
 4. Run tests, commit.
 5. Ask me 5 explain-back questions about what was built (design choices, failure modes, trade-offs). Do not continue until I answer.
-6. Tick the session in docs/PROGRESS.md and note decisions in docs/adr/ when a choice was made.
+6. Tick the session in docs/PROGRESS.md, note decisions in docs/adr/ when a choice was made, and add the session's concepts and explain-back answers to docs/learnings/ (one file per session, linked from its README).
