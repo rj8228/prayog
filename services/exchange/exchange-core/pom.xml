@@ -16,6 +16,11 @@
     <description>Matching engine as plain Java: no Spring, no system clock, no I/O on the order path.</description>
 
     <dependencies>
+        <!-- The engine emits the contract event records directly; contracts has no runtime dependencies. -->
+        <dependency>
+            <groupId>dev.prayog</groupId>
+            <artifactId>contracts</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

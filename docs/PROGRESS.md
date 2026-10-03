@@ -8,8 +8,8 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S1 Repo skeleton and tooling (5 h)
 
 ## M1 First module
-- [ ] S3 Contracts and domain types (5 h)
-- [ ] S4 Order book and limit matching (6 h)
+- [x] S3 Contracts and domain types (5 h) — ADR 0002
+- [x] S4 Order book and limit matching (6 h) — ADR 0003
 
 ## M2 Engine complete
 - [ ] S5 Market, cancel, modify (6 h)

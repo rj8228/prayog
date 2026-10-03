@@ -1,0 +1,28 @@
+package dev.prayog.exchange.core;
+
+import dev.prayog.contracts.Side;
+
+/**
+ * An order sitting on the book. It is also a node in its price level's doubly linked list, so removing it from the
+ * middle of the queue (a cancel, in S5) is O(1) without searching.
+ */
+final class RestingOrder {
+
+    final long orderId;
+    final long accountId;
+    final Side side;
+    final long price;
+    long leavesQuantity;
+
+    PriceLevel level;
+    RestingOrder prev;
+    RestingOrder next;
+
+    RestingOrder(long orderId, long accountId, Side side, long price, long leavesQuantity) {
+        this.orderId = orderId;
+        this.accountId = accountId;
+        this.side = side;
+        this.price = price;
+        this.leavesQuantity = leavesQuantity;
+    }
+}
