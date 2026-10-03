@@ -25,3 +25,11 @@
 > "Self-trade prevention is cancel-incoming: matching stops at the first resting order from the same account and cancels the incoming remainder. It's the common default, and a property test checks that no trade ever has the same buyer and seller."
 
 > "End-of-day expiry walks books in symbol order and orders by ID, because iterating a hash map would make replays non-deterministic."
+
+## Explain-back answers
+
+1. **Why round band edges inward?** Rounding outward would let a price just outside the true band through (₹110.05 for a band ending at ₹110.033). Rounding to the nearest tick could do the same. Inward keeps every accepted price within the rule, at the cost of a band at most one tick narrower.
+2. **Why a fixed check order, with state first?** One input must always give the same reject reason, because replays and client logic depend on it. State checks first also give the most useful answer ("market is halted" beats "price off tick" when nothing could trade anyway).
+3. **Why cancel-incoming STP?** It's simple, it never touches someone's resting order unexpectedly, and the account that caused the conflict (by sending the new order) bears the outcome. Downside: a market maker's aggressive hedge can be cancelled by its own quote. Cancel-resting or cancel-both suit that case.
+4. **Why no modifies while HALTED, even reductions?** Simplicity and safety: one rule ("only cancels") is easy to explain and test. A reduce-only modify is harmless and some venues allow it; it's a candidate for later, while a price change during a halt would create new trading interest.
+5. **Why expire in a fixed order?** Each cancel gets the next sequence number. A different order on replay would shift every later event number, change the event-log checksum (S8), and break consumers that deduplicate by sequence.
