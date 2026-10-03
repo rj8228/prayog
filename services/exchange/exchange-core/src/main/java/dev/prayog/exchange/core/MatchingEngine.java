@@ -36,10 +36,12 @@ public final class MatchingEngine {
     private final Map<String, Instrument> instruments = new HashMap<>();
     private final NavigableMap<String, OrderBook> books = new TreeMap<>();
     private final Set<Long> disabledAccounts = new HashSet<>(); // lookups only, never iterated
+    private final SessionSchedule schedule; // null: sessions change only by ops command
     private final EventSink sink;
 
     private SessionState session = SessionState.CLOSED;
     private long simTime;
+    private boolean ticked;
     private long nextEventSeq = 1;
     private long nextOrderId = 1;
     private long nextTradeId = 1;
@@ -47,7 +49,14 @@ public final class MatchingEngine {
     /** Set by {@link #match} when it stopped because the next fill would have been with the same account. */
     private boolean stoppedBySelfTrade;
 
+    /** An engine whose sessions change only through {@link SetSessionState} commands. */
     public MatchingEngine(Collection<Instrument> instruments, EventSink sink) {
+        this(instruments, null, sink);
+    }
+
+    /** An engine that also opens and closes the market itself when clock ticks cross the schedule's times. */
+    public MatchingEngine(Collection<Instrument> instruments, SessionSchedule schedule, EventSink sink) {
+        this.schedule = schedule;
         this.sink = Objects.requireNonNull(sink, "sink");
         for (Instrument instrument : instruments) {
             this.instruments.put(instrument.symbol(), instrument);
@@ -66,7 +75,7 @@ public final class MatchingEngine {
             case NewOrder order -> newOrder(order);
             case CancelOrder cancel -> cancel(cancel);
             case ModifyOrder modify -> modify(modify);
-            case ClockTick tick -> simTime = Math.max(simTime, tick.simTime()); // ticks never move time backwards
+            case ClockTick tick -> tick(tick.simTime());
             case SetSessionState state -> setSession(state.state());
             case SetAccountEnabled account -> setAccountEnabled(account.accountId(), account.enabled());
         }
@@ -230,6 +239,29 @@ public final class MatchingEngine {
     /** The worst price a market order accepts: the band edge, so it can never trade at an absurd price. */
     private static long marketLimit(Side side, Instrument instrument) {
         return side == Side.BUY ? instrument.bandHigh() : instrument.bandLow();
+    }
+
+    /**
+     * Advances sim time (never backwards) and applies the schedule. When a tick lands in a different scheduled period
+     * than the previous one, a boundary was crossed and the session is set to what the schedule says. Between
+     * boundaries an ops override (an early open, a halt) stands.
+     */
+    private void tick(long time) {
+        long previous = simTime;
+        boolean first = !ticked;
+        simTime = Math.max(simTime, time);
+        ticked = true;
+        if (schedule == null || (!first && schedule.period(previous) == schedule.period(simTime))) {
+            return;
+        }
+        if (!schedule.isOpenAt(simTime)) {
+            setSession(SessionState.CLOSED);
+            return;
+        }
+        if (!first && schedule.day(previous) != schedule.day(simTime)) {
+            setSession(SessionState.CLOSED); // the tick skipped a close: expire yesterday's orders first
+        }
+        setSession(SessionState.OPEN);
     }
 
     private void setSession(SessionState next) {
