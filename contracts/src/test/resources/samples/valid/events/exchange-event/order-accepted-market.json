@@ -1,0 +1,12 @@
+{
+  "type": "OrderAccepted",
+  "seq": 2,
+  "simTime": 1790000000000000,
+  "orderId": 2,
+  "clientOrderId": "c-2",
+  "accountId": 8,
+  "symbol": "ABC",
+  "side": "SELL",
+  "orderType": "MARKET",
+  "quantity": 4
+}

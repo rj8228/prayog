@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/rest/new-order-request.schema.json",
+  "title": "New order request",
+  "description": "POST /orders. The account comes from the access token, never from the body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["clientOrderId", "symbol", "side", "type", "quantity"],
+  "properties": {
+    "clientOrderId": { "$ref": "../common.schema.json#/$defs/clientOrderId" },
+    "symbol": { "$ref": "../common.schema.json#/$defs/symbol" },
+    "side": { "$ref": "../common.schema.json#/$defs/side" },
+    "type": { "$ref": "../common.schema.json#/$defs/orderType" },
+    "price": { "$ref": "../common.schema.json#/$defs/price" },
+    "quantity": { "$ref": "../common.schema.json#/$defs/quantity" }
+  },
+  "if": { "properties": { "type": { "const": "LIMIT" } } },
+  "then": { "required": ["price"] },
+  "else": { "not": { "required": ["price"] } }
+}

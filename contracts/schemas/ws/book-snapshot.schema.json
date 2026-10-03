@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/ws/book-snapshot.schema.json",
+  "title": "Order book snapshot (server to client)",
+  "description": "Full depth for one symbol, sent on subscribe. Apply later book.update messages with a higher seq on top of it.",
+  "type": "object",
+  "required": ["type", "seq", "simTime", "symbol", "bids", "asks"],
+  "properties": {
+    "type": { "const": "book.snapshot" },
+    "seq": { "$ref": "../common.schema.json#/$defs/seq" },
+    "simTime": { "$ref": "../common.schema.json#/$defs/simTime" },
+    "symbol": { "$ref": "../common.schema.json#/$defs/symbol" },
+    "bids": {
+      "description": "Best (highest) price first.",
+      "type": "array", "items": { "$ref": "../common.schema.json#/$defs/priceLevel" }
+    },
+    "asks": {
+      "description": "Best (lowest) price first.",
+      "type": "array", "items": { "$ref": "../common.schema.json#/$defs/priceLevel" }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "Trade",
+  "seq": 7,
+  "simTime": 1790000000000000,
+  "tradeId": 1,
+  "symbol": "ABC",
+  "price": 10000,
+  "quantity": 3,
+  "aggressorSide": "SELL",
+  "buyOrderId": 1,
+  "sellOrderId": 9,
+  "buyAccountId": 7,
+  "sellAccountId": 8
+}

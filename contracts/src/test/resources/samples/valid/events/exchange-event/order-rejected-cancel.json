@@ -1,0 +1,10 @@
+{
+  "type": "OrderRejected",
+  "seq": 4,
+  "simTime": 1790000000000000,
+  "orderId": 99,
+  "clientOrderId": "c-4",
+  "accountId": 7,
+  "symbol": "ABC",
+  "reason": "UNKNOWN_ORDER"
+}

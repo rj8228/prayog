@@ -1,0 +1,12 @@
+{
+  "type": "OrderAccepted",
+  "seq": 1,
+  "simTime": 1790000000000000,
+  "orderId": 1,
+  "clientOrderId": "c-1",
+  "accountId": 7,
+  "side": "BUY",
+  "orderType": "LIMIT",
+  "price": 10000,
+  "quantity": 10
+}

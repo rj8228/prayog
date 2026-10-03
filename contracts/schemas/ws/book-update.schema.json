@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/ws/book-update.schema.json",
+  "title": "Order book level update (server to client)",
+  "description": "The new total at one price level. quantity 0 means the level is gone.",
+  "type": "object",
+  "required": ["type", "seq", "simTime", "symbol", "side", "price", "quantity", "orderCount"],
+  "properties": {
+    "type": { "const": "book.update" },
+    "seq": { "$ref": "../common.schema.json#/$defs/seq" },
+    "simTime": { "$ref": "../common.schema.json#/$defs/simTime" },
+    "symbol": { "$ref": "../common.schema.json#/$defs/symbol" },
+    "side": { "$ref": "../common.schema.json#/$defs/side" },
+    "price": { "$ref": "../common.schema.json#/$defs/price" },
+    "quantity": { "$ref": "../common.schema.json#/$defs/quantityOrZero" },
+    "orderCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+  }
+}

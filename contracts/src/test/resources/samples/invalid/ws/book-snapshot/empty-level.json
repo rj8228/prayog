@@ -1,0 +1,14 @@
+{
+  "type": "book.snapshot",
+  "seq": 1,
+  "simTime": 0,
+  "symbol": "ABC",
+  "bids": [
+    {
+      "price": 100,
+      "quantity": 0,
+      "orderCount": 0
+    }
+  ],
+  "asks": []
+}

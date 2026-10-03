@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/ws/trade.schema.json",
+  "title": "Public trade print (server to client)",
+  "description": "Anonymous: no account or order IDs, as on a lit exchange.",
+  "type": "object",
+  "required": ["type", "seq", "simTime", "symbol", "tradeId", "price", "quantity", "aggressorSide"],
+  "properties": {
+    "type": { "const": "trade" },
+    "seq": { "$ref": "../common.schema.json#/$defs/seq" },
+    "simTime": { "$ref": "../common.schema.json#/$defs/simTime" },
+    "symbol": { "$ref": "../common.schema.json#/$defs/symbol" },
+    "tradeId": { "$ref": "../common.schema.json#/$defs/tradeId" },
+    "price": { "$ref": "../common.schema.json#/$defs/price" },
+    "quantity": { "$ref": "../common.schema.json#/$defs/quantity" },
+    "aggressorSide": { "$ref": "../common.schema.json#/$defs/side" }
+  },
+  "not": { "anyOf": [{ "required": ["buyAccountId"] }, { "required": ["sellAccountId"] }] }
+}

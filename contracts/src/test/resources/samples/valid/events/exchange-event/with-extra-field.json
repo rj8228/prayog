@@ -1,0 +1,7 @@
+{
+  "type": "SessionStateChanged",
+  "seq": 10,
+  "simTime": 1,
+  "state": "HALTED",
+  "addedInV2": true
+}

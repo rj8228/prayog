@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/ws/subscribe.schema.json",
+  "title": "Subscribe (client to server)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "channels", "symbols"],
+  "properties": {
+    "type": { "enum": ["subscribe", "unsubscribe"] },
+    "channels": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": { "enum": ["book", "trades"] }
+    },
+    "symbols": {
+      "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true,
+      "items": { "$ref": "../common.schema.json#/$defs/symbol" }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "type": "OrderRejected",
+  "seq": 3,
+  "simTime": 1790000000000000,
+  "clientOrderId": "c-3",
+  "accountId": 7,
+  "symbol": "ABC",
+  "reason": "PRICE_NOT_ON_TICK"
+}

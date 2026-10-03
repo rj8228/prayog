@@ -1,0 +1,7 @@
+{
+  "type": "https://prayog.dev/problems/order-rejected",
+  "title": "Order rejected",
+  "status": 422,
+  "detail": "Price outside today's band",
+  "reason": "PRICE_OUTSIDE_BAND"
+}

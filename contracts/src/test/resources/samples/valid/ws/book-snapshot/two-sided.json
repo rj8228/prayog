@@ -1,0 +1,20 @@
+{
+  "type": "book.snapshot",
+  "seq": 42,
+  "simTime": 1790000000000000,
+  "symbol": "ABC",
+  "bids": [
+    {
+      "price": 10000,
+      "quantity": 30,
+      "orderCount": 2
+    }
+  ],
+  "asks": [
+    {
+      "price": 10005,
+      "quantity": 5,
+      "orderCount": 1
+    }
+  ]
+}

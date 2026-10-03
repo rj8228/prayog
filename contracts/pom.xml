@@ -14,4 +14,39 @@
     <artifactId>contracts</artifactId>
     <name>contracts</name>
     <description>JSON Schemas and Java message types shared by all services.</description>
+
+    <!-- No runtime dependencies: the matching engine depends on this module. -->
+    <dependencies>
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Schemas sit at contracts/schemas/ so Python and web read them from the repo;
+             they are also packaged into the jar under schemas/ for Java services. -->
+        <resources>
+            <resource>
+                <directory>schemas</directory>
+                <targetPath>schemas</targetPath>
+            </resource>
+        </resources>
+    </build>
 </project>

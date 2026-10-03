@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/rest/modify-order-request.schema.json",
+  "title": "Modify order request",
+  "description": "PATCH /orders/{orderId}. Send the new price, the new total quantity, or both.",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "properties": {
+    "price": { "$ref": "../common.schema.json#/$defs/price" },
+    "quantity": { "$ref": "../common.schema.json#/$defs/quantity" }
+  }
+}

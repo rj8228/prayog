@@ -1,0 +1,10 @@
+{
+  "type": "BookUpdate",
+  "seq": 8,
+  "simTime": 1790000000000000,
+  "symbol": "ABC",
+  "side": "BUY",
+  "price": 10000,
+  "quantity": 7,
+  "orderCount": 1
+}

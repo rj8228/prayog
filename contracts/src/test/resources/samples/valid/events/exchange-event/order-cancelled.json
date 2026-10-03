@@ -1,0 +1,10 @@
+{
+  "type": "OrderCancelled",
+  "seq": 5,
+  "simTime": 1790000000000000,
+  "orderId": 2,
+  "accountId": 8,
+  "symbol": "ABC",
+  "cancelledQuantity": 4,
+  "reason": "NO_LIQUIDITY"
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/common.schema.json",
+  "title": "Shared definitions",
+  "description": "Types reused by every Prayog message. Integers stop at 2^53 - 1 so JavaScript can read them exactly.",
+  "$defs": {
+    "seq": {
+      "description": "Exchange sequence number. Strictly increasing; also the event ID consumers deduplicate on.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "simTime": {
+      "description": "Simulated time, microseconds since the Unix epoch (UTC).",
+      "type": "integer", "minimum": 0, "maximum": 9007199254740991
+    },
+    "price": {
+      "description": "Price in paise (1 rupee = 100 paise). Never a decimal.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "quantity": {
+      "description": "Number of shares.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "quantityOrZero": {
+      "description": "Number of shares; 0 is allowed (for example a price level that is now empty).",
+      "type": "integer", "minimum": 0, "maximum": 9007199254740991
+    },
+    "orderId": {
+      "description": "Server-assigned order ID, increasing.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "tradeId": {
+      "description": "Server-assigned trade ID, increasing.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "accountId": {
+      "description": "Trading account ID.",
+      "type": "integer", "minimum": 1, "maximum": 9007199254740991
+    },
+    "clientOrderId": {
+      "description": "ID chosen by the client to match responses to requests. A UUID fits.",
+      "type": "string", "pattern": "^[A-Za-z0-9_-]{1,36}$"
+    },
+    "symbol": {
+      "description": "Instrument symbol.",
+      "type": "string", "pattern": "^[A-Z][A-Z0-9_-]{0,19}$"
+    },
+    "side": { "enum": ["BUY", "SELL"] },
+    "orderType": { "enum": ["LIMIT", "MARKET"] },
+    "sessionState": { "enum": ["CLOSED", "OPEN", "HALTED"] },
+    "rejectReason": {
+      "enum": [
+        "UNKNOWN_SYMBOL", "INVALID_PRICE", "INVALID_QUANTITY", "PRICE_NOT_ON_TICK",
+        "PRICE_OUTSIDE_BAND", "SESSION_NOT_OPEN", "UNKNOWN_ORDER", "DUPLICATE_CLIENT_ORDER_ID",
+        "RATE_LIMITED", "ACCOUNT_DISABLED"
+      ]
+    },
+    "cancelReason": {
+      "enum": ["CLIENT_REQUEST", "SELF_TRADE_PREVENTION", "NO_LIQUIDITY", "MODIFIED_TO_ZERO", "KILL_SWITCH"]
+    },
+    "priceLevel": {
+      "type": "object",
+      "required": ["price", "quantity", "orderCount"],
+      "properties": {
+        "price": { "$ref": "#/$defs/price" },
+        "quantity": { "$ref": "#/$defs/quantity" },
+        "orderCount": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    }
+  }
+}

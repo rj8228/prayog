@@ -1,0 +1,9 @@
+{
+  "type": "book.update",
+  "seq": 43,
+  "simTime": 1,
+  "symbol": "ABC",
+  "price": 10005,
+  "quantity": 0,
+  "orderCount": 0
+}

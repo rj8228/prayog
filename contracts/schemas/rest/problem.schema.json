@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prayog.dev/schemas/rest/problem.schema.json",
+  "title": "Error response",
+  "description": "RFC 9457 Problem Details, returned with Content-Type application/problem+json.",
+  "type": "object",
+  "required": ["type", "title", "status"],
+  "properties": {
+    "type": { "type": "string", "format": "uri-reference" },
+    "title": { "type": "string" },
+    "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+    "detail": { "type": "string" },
+    "instance": { "type": "string", "format": "uri-reference" },
+    "reason": { "$ref": "../common.schema.json#/$defs/rejectReason" }
+  }
+}

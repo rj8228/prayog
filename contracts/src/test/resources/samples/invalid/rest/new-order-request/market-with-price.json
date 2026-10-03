@@ -1,0 +1,8 @@
+{
+  "clientOrderId": "c-1",
+  "symbol": "ABC",
+  "side": "BUY",
+  "type": "MARKET",
+  "price": 100,
+  "quantity": 1
+}

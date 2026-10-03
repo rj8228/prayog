@@ -1,0 +1,11 @@
+{
+  "type": "subscribe",
+  "channels": [
+    "book",
+    "trades"
+  ],
+  "symbols": [
+    "ABC",
+    "XYZ"
+  ]
+}
