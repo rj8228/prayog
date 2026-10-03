@@ -1,18 +1,23 @@
 package dev.prayog.exchange.core;
 
 import dev.prayog.contracts.OrderType;
+import dev.prayog.contracts.SessionState;
 import dev.prayog.contracts.Side;
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.contracts.event.OrderAccepted;
 import java.util.ArrayList;
 import java.util.List;
 
-/** An engine with one instrument (ABC, tick 5 paise), clock set to {@link #T0}, and every event collected. */
+/**
+ * An engine with one instrument (ABC: tick 5 paise, reference ₹100.00, 20% band → ₹80.00–₹120.00), clock at
+ * {@link #T0}, market OPEN, and every later event collected. The opening event itself is dropped so each test sees
+ * only its own events (sequence numbers therefore start at 2).
+ */
 final class EngineFixture {
 
     static final long T0 = 1_790_000_000_000_000L;
     static final String ABC = "ABC";
-    static final Instrument INSTRUMENT = new Instrument(ABC, 5, 1_000_000);
+    static final Instrument INSTRUMENT = new Instrument(ABC, 5, 1_000_000, 10_000, 20);
 
     final List<ExchangeEvent> events = new ArrayList<>();
     final MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
@@ -20,6 +25,8 @@ final class EngineFixture {
 
     EngineFixture() {
         engine.apply(new ClockTick(T0));
+        engine.apply(new SetSessionState(SessionState.OPEN));
+        events.clear();
     }
 
     void apply(Command command) {

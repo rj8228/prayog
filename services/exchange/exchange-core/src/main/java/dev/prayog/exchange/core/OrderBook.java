@@ -3,6 +3,7 @@ package dev.prayog.exchange.core;
 import dev.prayog.contracts.Side;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,16 @@ public final class OrderBook {
     /** The resting order with this ID, or null. */
     RestingOrder order(long orderId) {
         return ordersById.get(orderId);
+    }
+
+    /**
+     * Every resting order, lowest order ID first. Sorts, so it is for rare bulk operations (end-of-day expiry, the
+     * kill switch), never the per-order path.
+     */
+    List<RestingOrder> ordersInIdOrder() {
+        List<RestingOrder> orders = new ArrayList<>(ordersById.values());
+        orders.sort(Comparator.comparingLong(o -> o.orderId));
+        return orders;
     }
 
     /** The best level on a side, or null when that side is empty. */

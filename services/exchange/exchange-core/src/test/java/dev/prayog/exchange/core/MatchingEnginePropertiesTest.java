@@ -3,6 +3,7 @@ package dev.prayog.exchange.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.prayog.contracts.OrderType;
+import dev.prayog.contracts.SessionState;
 import dev.prayog.contracts.Side;
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.contracts.event.OrderAccepted;
@@ -33,17 +34,35 @@ class MatchingEnginePropertiesTest {
 
     private static final String ABC = "ABC";
     private static final long TICK = 5;
-    private static final Instrument INSTRUMENT = new Instrument(ABC, TICK, 1_000);
+    private static final Instrument INSTRUMENT = new Instrument(ABC, TICK, 1_000, 10_000, 20);
     private static final long T0 = 1_790_000_000_000_000L;
 
     @Property
     void bookIsNeverCrossedAndStaysConsistent(@ForAll("flows") List<Command> flow) {
-        MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), e -> {});
+        MatchingEngine engine = openEngine(e -> {});
         OrderBook book = engine.book(ABC);
         for (Command command : flow) {
             engine.apply(command);
             book.checkInvariants(); // includes best bid < best ask
         }
+    }
+
+    @Property
+    void bookIsEmptyWheneverTheMarketIsClosed(@ForAll("flows") List<Command> flow) {
+        MatchingEngine engine = openEngine(e -> {});
+        for (Command command : flow) {
+            engine.apply(command);
+            if (command instanceof SetSessionState s && s.state() == SessionState.CLOSED) {
+                assertThat(engine.book(ABC).orderCount()).isZero();
+            }
+        }
+    }
+
+    @Property
+    void noAccountEverTradesWithItself(@ForAll("flows") List<Command> flow) {
+        assertThat(run(flow).events)
+                .filteredOn(Trade.class::isInstance)
+                .allSatisfy(e -> assertThat(((Trade) e).buyAccountId()).isNotEqualTo(((Trade) e).sellAccountId()));
     }
 
     /** For every order: ordered = filled + still open + cancelled, where "ordered" follows modifies. */
@@ -128,6 +147,7 @@ class MatchingEnginePropertiesTest {
     void matchesTheReferenceMatcher(@ForAll("flows") List<Command> flow) {
         ReferenceMatcher reference = new ReferenceMatcher(Map.of(ABC, INSTRUMENT));
         reference.apply(new ClockTick(T0));
+        reference.apply(new SetSessionState(SessionState.OPEN));
         flow.forEach(reference::apply);
         assertThat(run(flow).events).isEqualTo(reference.events);
     }
@@ -136,10 +156,17 @@ class MatchingEnginePropertiesTest {
 
     private static Run run(List<Command> flow) {
         List<ExchangeEvent> events = new ArrayList<>();
-        MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
-        engine.apply(new ClockTick(T0));
+        MatchingEngine engine = openEngine(events::add);
         flow.forEach(engine::apply);
         return new Run(events, engine.book(ABC));
+    }
+
+    /** Engines start CLOSED; every flow starts from an open market at T0. */
+    private static MatchingEngine openEngine(EventSink sink) {
+        MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), sink);
+        engine.apply(new ClockTick(T0));
+        engine.apply(new SetSessionState(SessionState.OPEN));
+        return engine;
     }
 
     /** Mostly limit orders around 100.00 rupees, plus market orders, cancels, modifies, ticks and a few bad inputs. */
@@ -166,8 +193,19 @@ class MatchingEnginePropertiesTest {
                 new NewOrder("bad-price", 1, ABC, Side.SELL, OrderType.LIMIT, 0, 1),
                 new NewOrder("off-tick", 1, ABC, Side.BUY, OrderType.LIMIT, 10_001, 1),
                 new NewOrder("priced-market", 1, ABC, Side.BUY, OrderType.MARKET, 10_000, 1),
+                new NewOrder("above-band", 1, ABC, Side.SELL, OrderType.LIMIT, 12_005, 1),
+                new NewOrder("below-band", 1, ABC, Side.BUY, OrderType.LIMIT, 7_995, 1),
                 new ModifyOrder("bad-modify", 1, ABC, 1, 10_001, 5),
+                new ModifyOrder("band-modify", 1, ABC, 1, 12_005, 5),
                 new CancelOrder("bad-cancel", 1, "ZZZ", 1));
+        // Mostly OPEN so trading continues; HALTED and CLOSED exercise the session rules and DAY expiry.
+        Arbitrary<Command> session = Arbitraries.frequencyOf(
+                        Tuple.of(6, Arbitraries.just(SessionState.OPEN)),
+                        Tuple.of(3, Arbitraries.just(SessionState.HALTED)),
+                        Tuple.of(1, Arbitraries.just(SessionState.CLOSED)))
+                .map(SetSessionState::new);
+        Arbitrary<Command> killSwitch =
+                Combinators.combine(account, Arbitraries.of(true, false)).as(SetAccountEnabled::new);
 
         return Arbitraries.frequencyOf(
                         Tuple.of(50, limit),
@@ -175,7 +213,9 @@ class MatchingEnginePropertiesTest {
                         Tuple.of(14, cancel),
                         Tuple.of(14, modify),
                         Tuple.of(6, tick),
-                        Tuple.of(8, invalid))
+                        Tuple.of(8, invalid),
+                        Tuple.of(4, session),
+                        Tuple.of(3, killSwitch))
                 .list()
                 .ofMaxSize(200);
     }

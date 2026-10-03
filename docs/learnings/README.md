@@ -15,6 +15,7 @@ The longer background reading lives in [`docs/overview/functional.html`](../over
 | S1 Repo skeleton | [S01-repo-skeleton.md](S01-repo-skeleton.md) | Module boundaries, Maven parent POMs, wrappers, lock files, pinning CI actions |
 | S3–S4 Contracts and order book | [S03-S04-contracts-and-order-book.md](S03-S04-contracts-and-order-book.md) | JSON Schema contracts, integer money, price-time priority, order book data structures, determinism, property testing |
 | S5 Market, cancel, modify | [S05-market-cancel-modify.md](S05-market-cancel-modify.md) | Commands and event sourcing, modify semantics, queue priority, information leaks, test coverage |
+| S6 Bands, sessions, STP | [S06-bands-sessions-stp.md](S06-bands-sessions-stp.md) | Price bands, session states, DAY expiry, self-trade prevention, kill switch |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far

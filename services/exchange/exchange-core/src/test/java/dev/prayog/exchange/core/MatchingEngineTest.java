@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import dev.prayog.contracts.OrderType;
 import dev.prayog.contracts.RejectReason;
+import dev.prayog.contracts.SessionState;
 import dev.prayog.contracts.Side;
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.contracts.event.OrderAccepted;
@@ -23,11 +24,14 @@ class MatchingEngineTest {
     private static final String ABC = "ABC";
 
     private final List<ExchangeEvent> events = new ArrayList<>();
-    private final MatchingEngine engine = new MatchingEngine(List.of(new Instrument(ABC, 5, 1_000_000)), events::add);
+    private final MatchingEngine engine =
+            new MatchingEngine(List.of(new Instrument(ABC, 5, 1_000_000, 10_000, 20)), events::add);
     private final OrderBook book = engine.book(ABC);
 
     {
         engine.apply(new ClockTick(T0));
+        engine.apply(new SetSessionState(SessionState.OPEN));
+        events.clear(); // tests see only their own events; sequence numbers start at 2
     }
 
     @AfterEach
@@ -52,7 +56,7 @@ class MatchingEngineTest {
         limit(7, BUY, 10_000, 10);
 
         assertThat(events)
-                .containsExactly(new OrderAccepted(1, T0, 1, "c-7", 7, ABC, BUY, OrderType.LIMIT, 10_000, 10));
+                .containsExactly(new OrderAccepted(2, T0, 1, "c-7", 7, ABC, BUY, OrderType.LIMIT, 10_000, 10));
     }
 
     @Test
@@ -60,7 +64,7 @@ class MatchingEngineTest {
         limit(1, SELL, 10_000, 10);
         limit(2, BUY, 10_050, 10); // willing to pay more; gets the better resting price
 
-        assertThat(trades()).containsExactly(new Trade(3, T0, 1, ABC, 10_000, 10, BUY, 2, 1, 2, 1));
+        assertThat(trades()).containsExactly(new Trade(4, T0, 1, ABC, 10_000, 10, BUY, 2, 1, 2, 1));
         assertThat(book.orderCount()).isZero();
     }
 
@@ -69,7 +73,7 @@ class MatchingEngineTest {
         limit(1, BUY, 10_000, 4);
         limit(2, SELL, 9_990, 4);
 
-        assertThat(trades()).containsExactly(new Trade(3, T0, 1, ABC, 10_000, 4, SELL, 1, 2, 1, 2));
+        assertThat(trades()).containsExactly(new Trade(4, T0, 1, ABC, 10_000, 4, SELL, 1, 2, 1, 2));
     }
 
     @Test
@@ -178,7 +182,7 @@ class MatchingEngineTest {
         engine.apply(new ClockTick(T0 + 42));
         engine.apply(new NewOrder("c-2", 2, ABC, BUY, OrderType.LIMIT, 10_000, 1));
 
-        assertThat(events).extracting(ExchangeEvent::seq).containsExactly(1L, 2L, 3L);
+        assertThat(events).extracting(ExchangeEvent::seq).containsExactly(2L, 3L, 4L);
         assertThat(events).extracting(ExchangeEvent::simTime).containsExactly(T0, T0 + 42, T0 + 42);
     }
 

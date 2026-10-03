@@ -32,7 +32,7 @@ class MarketOrderTest {
         long id = f.market(3, BUY, 7);
 
         assertThat(f.since(mark).getFirst())
-                .isEqualTo(new OrderAccepted(3, T0, id, "m-3", 3, ABC, BUY, OrderType.MARKET, 0, 7));
+                .isEqualTo(new OrderAccepted(4, T0, id, "m-3", 3, ABC, BUY, OrderType.MARKET, 0, 7));
         assertThat(f.all(Trade.class))
                 .extracting(Trade::price, Trade::quantity)
                 .containsExactly(tuple(10_000L, 5L), tuple(10_010L, 2L));
@@ -59,7 +59,7 @@ class MarketOrderTest {
         long id = f.market(2, BUY, 10);
 
         assertThat(f.since(mark).getLast())
-                .isEqualTo(new OrderCancelled(4, T0, id, 2, ABC, 7, CancelReason.NO_LIQUIDITY));
+                .isEqualTo(new OrderCancelled(5, T0, id, 2, ABC, 7, CancelReason.NO_LIQUIDITY));
         assertThat(f.book.orderCount()).isZero();
     }
 
@@ -69,8 +69,8 @@ class MarketOrderTest {
 
         assertThat(f.events)
                 .containsExactly(
-                        new OrderAccepted(1, T0, id, "m-1", 1, ABC, SELL, OrderType.MARKET, 0, 10),
-                        new OrderCancelled(2, T0, id, 1, ABC, 10, CancelReason.NO_LIQUIDITY));
+                        new OrderAccepted(2, T0, id, "m-1", 1, ABC, SELL, OrderType.MARKET, 0, 10),
+                        new OrderCancelled(3, T0, id, 1, ABC, 10, CancelReason.NO_LIQUIDITY));
     }
 
     @Test

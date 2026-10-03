@@ -40,7 +40,7 @@ class CancelModifyTest {
             f.limit(2, SELL, 10_000, 4);
             f.cancel(1, id);
 
-            assertThat(last()).isEqualTo(new OrderCancelled(4, T0, id, 1, ABC, 6, CancelReason.CLIENT_REQUEST));
+            assertThat(last()).isEqualTo(new OrderCancelled(5, T0, id, 1, ABC, 6, CancelReason.CLIENT_REQUEST));
             assertThat(f.book.orderCount()).isZero();
         }
 
@@ -59,7 +59,7 @@ class CancelModifyTest {
         void unknownOrderIsRejected() {
             f.cancel(1, 99);
 
-            assertThat(last()).isEqualTo(new OrderRejected(1, T0, 99, "x-99", 1, ABC, RejectReason.UNKNOWN_ORDER));
+            assertThat(last()).isEqualTo(new OrderRejected(2, T0, 99, "x-99", 1, ABC, RejectReason.UNKNOWN_ORDER));
         }
 
         @Test
@@ -104,7 +104,7 @@ class CancelModifyTest {
             f.modify(1, a, 10_000, 3);
             f.limit(3, SELL, 10_000, 4);
 
-            assertThat(f.all(OrderModified.class)).containsExactly(new OrderModified(3, T0, a, 1, ABC, 10_000, 3, 3));
+            assertThat(f.all(OrderModified.class)).containsExactly(new OrderModified(4, T0, a, 1, ABC, 10_000, 3, 3));
             assertThat(f.all(Trade.class))
                     .extracting(Trade::buyOrderId, Trade::quantity)
                     .containsExactly(tuple(a, 3L), tuple(b, 1L));
@@ -116,7 +116,7 @@ class CancelModifyTest {
             f.limit(2, SELL, 10_000, 4);
             f.modify(1, a, 10_000, 8);
 
-            assertThat(last()).isEqualTo(new OrderModified(4, T0, a, 1, ABC, 10_000, 8, 4));
+            assertThat(last()).isEqualTo(new OrderModified(5, T0, a, 1, ABC, 10_000, 8, 4));
             assertThat(f.book.leavesQuantity(a)).isEqualTo(4);
         }
 
@@ -151,8 +151,8 @@ class CancelModifyTest {
 
             assertThat(f.since(mark))
                     .containsExactly(
-                            new OrderModified(3, T0, a, 1, ABC, 10_010, 10, 10),
-                            new Trade(4, T0, 1, ABC, 10_010, 4, BUY, a, ask, 1, 2));
+                            new OrderModified(4, T0, a, 1, ABC, 10_010, 10, 10),
+                            new Trade(5, T0, 1, ABC, 10_010, 4, BUY, a, ask, 1, 2));
             assertThat(f.book.leavesQuantity(a)).isEqualTo(6);
             assertThat(f.book.bestBid()).isEqualTo(10_010);
         }
@@ -163,7 +163,7 @@ class CancelModifyTest {
             f.limit(2, SELL, 10_000, 4);
             f.modify(1, a, 10_000, 4);
 
-            assertThat(last()).isEqualTo(new OrderCancelled(4, T0, a, 1, ABC, 6, CancelReason.MODIFIED_TO_ZERO));
+            assertThat(last()).isEqualTo(new OrderCancelled(5, T0, a, 1, ABC, 6, CancelReason.MODIFIED_TO_ZERO));
             assertThat(f.book.orderCount()).isZero();
         }
 
@@ -183,7 +183,7 @@ class CancelModifyTest {
             long a = f.limit(1, BUY, 10_000, 5);
             f.modify(2, a, 10_000, 1);
 
-            assertThat(last()).isEqualTo(new OrderRejected(2, T0, a, "x-" + a, 2, ABC, RejectReason.UNKNOWN_ORDER));
+            assertThat(last()).isEqualTo(new OrderRejected(3, T0, a, "x-" + a, 2, ABC, RejectReason.UNKNOWN_ORDER));
             assertThat(f.book.leavesQuantity(a)).isEqualTo(5);
         }
 

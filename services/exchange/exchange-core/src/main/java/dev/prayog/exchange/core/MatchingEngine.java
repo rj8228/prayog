@@ -3,34 +3,49 @@ package dev.prayog.exchange.core;
 import dev.prayog.contracts.CancelReason;
 import dev.prayog.contracts.OrderType;
 import dev.prayog.contracts.RejectReason;
+import dev.prayog.contracts.SessionState;
 import dev.prayog.contracts.Side;
 import dev.prayog.contracts.event.OrderAccepted;
 import dev.prayog.contracts.event.OrderCancelled;
 import dev.prayog.contracts.event.OrderModified;
 import dev.prayog.contracts.event.OrderRejected;
+import dev.prayog.contracts.event.SessionStateChanged;
 import dev.prayog.contracts.event.Trade;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Applies exchange rules to incoming commands and emits events. Price-time priority: the best price trades first, and
  * at one price the oldest order trades first. A trade always happens at the resting order's price.
  *
  * <p>Single-threaded and deterministic: it owns every counter, takes time only from {@link ClockTick} commands, and
- * never iterates a hash map, so the same commands always give the same events.
+ * never iterates a hash map, so the same commands always give the same events. Bulk operations walk the books in
+ * symbol order (a {@link TreeMap}) and each book in order-ID order.
+ *
+ * <p>Checks run in a fixed order, so a reject always has one predictable reason: symbol, account enabled, session,
+ * quantity, price, tick, band.
  */
 public final class MatchingEngine {
 
     private final Map<String, Instrument> instruments = new HashMap<>();
-    private final Map<String, OrderBook> books = new HashMap<>();
+    private final NavigableMap<String, OrderBook> books = new TreeMap<>();
+    private final Set<Long> disabledAccounts = new HashSet<>(); // lookups only, never iterated
     private final EventSink sink;
 
+    private SessionState session = SessionState.CLOSED;
     private long simTime;
     private long nextEventSeq = 1;
     private long nextOrderId = 1;
     private long nextTradeId = 1;
+
+    /** Set by {@link #match} when it stopped because the next fill would have been with the same account. */
+    private boolean stoppedBySelfTrade;
 
     public MatchingEngine(Collection<Instrument> instruments, EventSink sink) {
         this.sink = Objects.requireNonNull(sink, "sink");
@@ -52,8 +67,8 @@ public final class MatchingEngine {
             case CancelOrder cancel -> cancel(cancel);
             case ModifyOrder modify -> modify(modify);
             case ClockTick tick -> simTime = Math.max(simTime, tick.simTime()); // ticks never move time backwards
-            case SetSessionState state -> throw new UnsupportedOperationException("Sessions arrive in S6");
-            case SetAccountEnabled account -> throw new UnsupportedOperationException("Kill switch arrives in S6");
+            case SetSessionState state -> setSession(state.state());
+            case SetAccountEnabled account -> setAccountEnabled(account.accountId(), account.enabled());
         }
     }
 
@@ -80,12 +95,14 @@ public final class MatchingEngine {
 
         OrderBook book = books.get(order.symbol());
         boolean market = order.type() == OrderType.MARKET;
-        long limit = market ? marketLimit(order.side()) : order.price();
+        long limit = market ? marketLimit(order.side(), instrument) : order.price();
         long leaves = match(book, orderId, order.accountId(), order.side(), limit, order.quantity());
         if (leaves == 0) {
             return;
         }
-        if (market) {
+        if (stoppedBySelfTrade) {
+            cancelled(orderId, order.accountId(), book.symbol(), leaves, CancelReason.SELF_TRADE_PREVENTION);
+        } else if (market) {
             // A market order never rests: whatever the book could not fill is cancelled.
             cancelled(orderId, order.accountId(), book.symbol(), leaves, CancelReason.NO_LIQUIDITY);
         } else {
@@ -96,14 +113,22 @@ public final class MatchingEngine {
 
     private void cancel(CancelOrder cancel) {
         OrderBook book = books.get(cancel.symbol());
+        if (book != null && session == SessionState.CLOSED) {
+            // Cancels are allowed while HALTED so people can reduce risk; CLOSED has no live orders anyway.
+            reject(
+                    cancel.orderId(),
+                    cancel.clientOrderId(),
+                    cancel.accountId(),
+                    cancel.symbol(),
+                    RejectReason.SESSION_NOT_OPEN);
+            return;
+        }
         RestingOrder order = book == null ? null : ownOrder(book, cancel.orderId(), cancel.accountId());
         if (order == null) {
             reject(cancel.orderId(), cancel.clientOrderId(), cancel.accountId(), cancel.symbol(), missing(book));
             return;
         }
-        long open = order.leavesQuantity;
-        book.remove(order);
-        cancelled(order.orderId, order.accountId, book.symbol(), open, CancelReason.CLIENT_REQUEST);
+        removeAndCancel(book, order, CancelReason.CLIENT_REQUEST);
     }
 
     /**
@@ -113,6 +138,15 @@ public final class MatchingEngine {
      */
     private void modify(ModifyOrder modify) {
         OrderBook book = books.get(modify.symbol());
+        if (book != null && session != SessionState.OPEN) {
+            reject(
+                    modify.orderId(),
+                    modify.clientOrderId(),
+                    modify.accountId(),
+                    modify.symbol(),
+                    RejectReason.SESSION_NOT_OPEN);
+            return;
+        }
         RestingOrder order = book == null ? null : ownOrder(book, modify.orderId(), modify.accountId());
         if (order == null) {
             reject(modify.orderId(), modify.clientOrderId(), modify.accountId(), modify.symbol(), missing(book));
@@ -127,9 +161,7 @@ public final class MatchingEngine {
         long filled = order.quantity - order.leavesQuantity;
         if (modify.quantity() <= filled) {
             // Nothing would be left open (BUILD_PLAN 16.3): cancel the open part.
-            long open = order.leavesQuantity;
-            book.remove(order);
-            cancelled(order.orderId, order.accountId, book.symbol(), open, CancelReason.MODIFIED_TO_ZERO);
+            removeAndCancel(book, order, CancelReason.MODIFIED_TO_ZERO);
             return;
         }
 
@@ -144,7 +176,9 @@ public final class MatchingEngine {
         book.remove(order);
         modified(order, modify, newLeaves);
         long leaves = match(book, order.orderId, order.accountId, order.side, modify.price(), newLeaves);
-        if (leaves > 0) {
+        if (leaves > 0 && stoppedBySelfTrade) {
+            cancelled(order.orderId, order.accountId, book.symbol(), leaves, CancelReason.SELF_TRADE_PREVENTION);
+        } else if (leaves > 0) {
             book.add(new RestingOrder(
                     order.orderId, order.accountId, order.side, modify.price(), modify.quantity(), leaves));
         }
@@ -153,12 +187,21 @@ public final class MatchingEngine {
     /**
      * Trades an incoming quantity against the opposite side while prices cross. Returns the unfilled quantity. The
      * incoming order is not on the book while it matches.
+     *
+     * <p>Self-trade prevention (cancel incoming): if the next resting order to fill belongs to the same account,
+     * matching stops and {@link #stoppedBySelfTrade} is set; the caller cancels the remainder. Fills already made with
+     * other accounts stand.
      */
     private long match(OrderBook book, long orderId, long accountId, Side side, long limit, long quantity) {
+        stoppedBySelfTrade = false;
         long leaves = quantity;
         PriceLevel level;
         while (leaves > 0 && (level = book.bestLevel(side.opposite())) != null && crosses(side, limit, level)) {
             RestingOrder resting = level.head();
+            if (resting.accountId == accountId) {
+                stoppedBySelfTrade = true;
+                break;
+            }
             long fill = Math.min(leaves, resting.leavesQuantity);
             boolean buying = side == Side.BUY;
             sink.accept(new Trade(
@@ -184,9 +227,47 @@ public final class MatchingEngine {
         return side == Side.BUY ? opposite.price <= limit : opposite.price >= limit;
     }
 
-    /** The worst price a market order accepts. Unbounded until price bands arrive in S6. */
-    private static long marketLimit(Side side) {
-        return side == Side.BUY ? Long.MAX_VALUE : 0;
+    /** The worst price a market order accepts: the band edge, so it can never trade at an absurd price. */
+    private static long marketLimit(Side side, Instrument instrument) {
+        return side == Side.BUY ? instrument.bandHigh() : instrument.bandLow();
+    }
+
+    private void setSession(SessionState next) {
+        if (next == session) {
+            return;
+        }
+        session = next;
+        sink.accept(new SessionStateChanged(nextEventSeq++, simTime, next));
+        if (next == SessionState.CLOSED) {
+            // Every order is a DAY order: whatever is still open expires at the close.
+            for (OrderBook book : books.values()) {
+                for (RestingOrder order : book.ordersInIdOrder()) {
+                    removeAndCancel(book, order, CancelReason.EXPIRED);
+                }
+            }
+        }
+    }
+
+    /** Disabling is the per-account kill switch: cancel everything the account has open and refuse new orders. */
+    private void setAccountEnabled(long accountId, boolean enabled) {
+        if (enabled) {
+            disabledAccounts.remove(accountId);
+            return;
+        }
+        disabledAccounts.add(accountId);
+        for (OrderBook book : books.values()) {
+            for (RestingOrder order : book.ordersInIdOrder()) {
+                if (order.accountId == accountId) {
+                    removeAndCancel(book, order, CancelReason.KILL_SWITCH);
+                }
+            }
+        }
+    }
+
+    private void removeAndCancel(OrderBook book, RestingOrder order, CancelReason reason) {
+        long open = order.leavesQuantity;
+        book.remove(order);
+        cancelled(order.orderId, order.accountId, book.symbol(), open, reason);
     }
 
     /** Another account's order is reported exactly like a missing one, so its existence is not revealed. */
@@ -200,7 +281,13 @@ public final class MatchingEngine {
     }
 
     /** First failing check wins, so a reject always has one clear reason. */
-    private static RejectReason validateNew(NewOrder order, Instrument instrument) {
+    private RejectReason validateNew(NewOrder order, Instrument instrument) {
+        if (disabledAccounts.contains(order.accountId())) {
+            return RejectReason.ACCOUNT_DISABLED;
+        }
+        if (session != SessionState.OPEN) {
+            return RejectReason.SESSION_NOT_OPEN;
+        }
         if (order.quantity() <= 0 || order.quantity() > instrument.maxOrderQuantity()) {
             return RejectReason.INVALID_QUANTITY;
         }
@@ -223,6 +310,9 @@ public final class MatchingEngine {
         }
         if (price % instrument.tickSize() != 0) {
             return RejectReason.PRICE_NOT_ON_TICK;
+        }
+        if (price < instrument.bandLow() || price > instrument.bandHigh()) {
+            return RejectReason.PRICE_OUTSIDE_BAND;
         }
         return null;
     }
