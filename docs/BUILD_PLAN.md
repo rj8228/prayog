@@ -298,6 +298,8 @@ Confirmed by Raj before M0. These override earlier sections where they differ.
 
 networknt json-schema-validator, Python `jsonschema`, pytest-asyncio, `testcontainers-jooq-codegen-maven-plugin`, Spotless + palantir-java-format, ESLint, Prettier, Vitest, Testing Library, `oidc-client-ts`, TradingView Lightweight Charts. S14 analysis libraries (pandas, scipy, matplotlib) still need approval when S14 starts.
 
+Approved 2026-10-04 for Step 1.5: **MkDocs Material** (docs site build only, never shipped in the app) and **react-grid-layout** (web workspace: drag, drop and resize panels).
+
 ### 16.3 Rule clarifications
 
 - A modify that reduces quantity to the filled amount or below becomes a cancel.
