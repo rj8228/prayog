@@ -181,6 +181,8 @@ services:
     profiles: [app]
     depends_on:
       keycloak: { condition: service_healthy }
+      # A one-shot job: declaring it completed-successfully also tells `up --wait` its exit is expected.
+      kafka-init: { condition: service_completed_successfully }
     environment:
       PRAYOG_JOURNAL_DIR: /data/journal
       # Keys come straight from Keycloak inside the network; tokens still name the public issuer.
