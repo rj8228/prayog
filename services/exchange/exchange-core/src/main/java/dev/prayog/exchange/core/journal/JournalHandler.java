@@ -36,18 +36,36 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
     /**
      * Starts a new recorded session: writes {@code setup} as record 0 of the input journal and flushes it.
      *
-     * @throws IllegalStateException if the journals already hold a session. Resuming after a restart (replaying the
-     *     journal into the engine first, then continuing its sequence) comes with the app wiring.
+     * @throws IllegalStateException if the journals already hold a session; use {@link #resume} after
+     *     {@link JournalRecovery} instead
      */
     public JournalHandler(Journal input, Journal events, EngineSetup setup) throws IOException {
         if (input.lastSeq() != -1 || events.lastSeq() != -1) {
-            throw new IllegalStateException("journal already holds a session; resuming is not supported yet");
+            throw new IllegalStateException("journal already holds a session; recover and resume it instead");
         }
         this.input = input;
         this.events = events;
         int length = codec.encode(setup, buffer, 0);
         input.append(SETUP_SEQ, buffer, 0, length);
         input.flush();
+    }
+
+    private JournalHandler(Journal input, Journal events) {
+        this.input = input;
+        this.events = events;
+    }
+
+    /**
+     * Continues a recovered session: appends after what is already there. Both journals must end exactly where
+     * recovery left them, or the files changed underneath us.
+     */
+    public static JournalHandler resume(Journal input, Journal events, JournalRecovery.Recovered recovered) {
+        if (input.lastSeq() != recovered.lastInputSeq() || events.lastSeq() != recovered.lastEventSeq()) {
+            throw new IllegalStateException("journals moved since recovery: input " + input.lastSeq() + " vs "
+                    + recovered.lastInputSeq() + ", events " + events.lastSeq() + " vs "
+                    + recovered.lastEventSeq());
+        }
+        return new JournalHandler(input, events);
     }
 
     /** Opens (or creates) both journals in {@code dir} and starts a session there. */

@@ -14,12 +14,21 @@ import java.util.List;
 public final class CommandSlot {
 
     Command command;
+    Object context;
     long inputSeq;
     final List<ExchangeEvent> events = new ArrayList<>();
 
     /** The command, as submitted. */
     public Command command() {
         return command;
+    }
+
+    /**
+     * Whatever the producer attached, such as the pending HTTP response waiting for this command's outcome. Never
+     * journaled and never seen by the engine: it only lets a later stage find who to answer.
+     */
+    public Object context() {
+        return context;
     }
 
     /** Position of this command in the official input order, starting at 1. */

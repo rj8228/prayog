@@ -1,7 +1,7 @@
 package dev.prayog.exchange.core.pipeline;
 
 import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.EventTranslatorOneArg;
+import com.lmax.disruptor.EventTranslatorTwoArg;
 import com.lmax.disruptor.FatalExceptionHandler;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -33,8 +33,11 @@ import java.util.function.Function;
  */
 public final class ExchangePipeline implements AutoCloseable {
 
-    private static final EventTranslatorOneArg<CommandSlot, Command> WRITE_COMMAND =
-            (slot, sequence, command) -> slot.command = command;
+    private static final EventTranslatorTwoArg<CommandSlot, Command, Object> WRITE_COMMAND =
+            (slot, sequence, command, context) -> {
+                slot.command = command;
+                slot.context = context;
+            };
 
     private final Disruptor<CommandSlot> disruptor;
     private final RingBuffer<CommandSlot> ring;
@@ -53,7 +56,12 @@ public final class ExchangePipeline implements AutoCloseable {
      * a command.
      */
     public void submit(Command command) {
-        ring.publishEvent(WRITE_COMMAND, Objects.requireNonNull(command, "command"));
+        submit(command, null);
+    }
+
+    /** As {@link #submit(Command)}, with a context that later stages read from {@link CommandSlot#context()}. */
+    public void submit(Command command, Object context) {
+        ring.publishEvent(WRITE_COMMAND, Objects.requireNonNull(command, "command"), context);
     }
 
     /**
@@ -61,7 +69,12 @@ public final class ExchangePipeline implements AutoCloseable {
      * (back-pressure) instead of queueing without limit.
      */
     public boolean trySubmit(Command command) {
-        return ring.tryPublishEvent(WRITE_COMMAND, Objects.requireNonNull(command, "command"));
+        return trySubmit(command, null);
+    }
+
+    /** As {@link #trySubmit(Command)}, with a context that later stages read from {@link CommandSlot#context()}. */
+    public boolean trySubmit(Command command, Object context) {
+        return ring.tryPublishEvent(WRITE_COMMAND, Objects.requireNonNull(command, "command"), context);
     }
 
     /** Processes everything already published, then stops all handler threads. */
@@ -75,10 +88,23 @@ public final class ExchangePipeline implements AutoCloseable {
         private final PipelineConfig config;
         private final Function<EventSink, MatchingEngine> engineFactory;
         private final List<PipelineHandler[]> stages = new ArrayList<>();
+        private long lastInputSeq;
 
         private Builder(PipelineConfig config, Function<EventSink, MatchingEngine> engineFactory) {
             this.config = Objects.requireNonNull(config, "config");
             this.engineFactory = Objects.requireNonNull(engineFactory, "engineFactory");
+        }
+
+        /**
+         * Continues an existing session: the first command processed gets {@code lastInputSeq + 1}. Used after the
+         * engine has been rebuilt from a journal that already holds commands up to {@code lastInputSeq}.
+         */
+        public Builder continueAfter(long lastInputSeq) {
+            if (lastInputSeq < 0) {
+                throw new IllegalArgumentException("lastInputSeq must not be negative: " + lastInputSeq);
+            }
+            this.lastInputSeq = lastInputSeq;
+            return this;
         }
 
         /** Adds a stage that runs after all previous stages. Handlers within one stage run in parallel. */
@@ -99,7 +125,8 @@ public final class ExchangePipeline implements AutoCloseable {
                     ProducerType.MULTI, // gateway threads, the clock and ops all publish
                     config.waitStrategy().create());
             disruptor.setDefaultExceptionHandler(new FatalExceptionHandler());
-            EventHandlerGroup<CommandSlot> group = disruptor.handleEventsWith(new MatchingHandler(engineFactory));
+            EventHandlerGroup<CommandSlot> group =
+                    disruptor.handleEventsWith(new MatchingHandler(engineFactory, lastInputSeq));
             for (PipelineHandler[] stage : stages) {
                 EventHandler<CommandSlot>[] adapted = new EventHandler[stage.length];
                 for (int i = 0; i < stage.length; i++) {
@@ -122,9 +149,10 @@ public final class ExchangePipeline implements AutoCloseable {
         private CommandSlot current;
         private long inputSeq;
 
-        MatchingHandler(Function<EventSink, MatchingEngine> engineFactory) {
+        MatchingHandler(Function<EventSink, MatchingEngine> engineFactory, long lastInputSeq) {
             EventSink intoCurrentSlot = (ExchangeEvent event) -> current.events.add(event);
             this.engine = engineFactory.apply(intoCurrentSlot);
+            this.inputSeq = lastInputSeq;
         }
 
         @Override
