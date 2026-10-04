@@ -3,7 +3,10 @@ name = "prayog-agents"
 version = "0.1.0"
 description = "Simulated traders that use the public Prayog API."
 requires-python = ">=3.12,<3.13"
-dependencies = ["prayog-sdk"]
+dependencies = [
+    "numpy>=2.5.3",
+    "prayog-sdk",
+]
 
 [tool.uv.sources]
 prayog-sdk = { workspace = true }
