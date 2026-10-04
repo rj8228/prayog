@@ -38,5 +38,7 @@ Browsers, curl and Python resolve `*.localhost` to your own machine. If a tool d
 127.0.0.1 app.prayog.localhost api.prayog.localhost auth.prayog.localhost traefik.prayog.localhost grafana.prayog.localhost
 ```
 
+Step-by-step checks, failure drills and debugging help: [docs/runbook/](docs/runbook/README.md).
+
 The Keycloak realm and the database users are created only when their data volumes are empty. After changing
 `deploy/compose/keycloak/prayog-realm.json`, `deploy/compose/postgres/init/` or the secrets in `.env`, run `make reset`.
