@@ -66,13 +66,25 @@ class JournalRecoveryTest {
     @Test
     void anEventLogAheadOfTheInputJournalIsRefused() throws Exception {
         runFresh(1, 200);
-        // Drop the input journal's tail but keep all events: the events can no longer be explained.
+        // Drop the second half of the input journal (cut exactly after a record) but keep every event: the events
+        // can no longer be explained by the commands.
         Path input = Segments.list(dir, JournalHandler.INPUT).getLast();
+        List<Long> recordEnds = new ArrayList<>();
+        JournalReader.read(
+                dir,
+                JournalHandler.INPUT,
+                (seq, buffer, offset, length) -> recordEnds.add((long) offset + length + 4)); // payload end + CRC
+        assertThat(recordEnds).as("records in the input journal").hasSizeGreaterThan(100);
+        long cut = recordEnds.get(recordEnds.size() / 2);
+        long before = Files.size(input);
         try (RandomAccessFile file = new RandomAccessFile(input.toFile(), "rw")) {
-            file.setLength(file.length() / 2);
+            file.setLength(cut);
         }
         try (FileJournal inputJournal = FileJournal.open(dir, JournalHandler.INPUT);
                 FileJournal eventLog = FileJournal.open(dir, JournalHandler.EVENTS)) {
+            assertThat(inputJournal.lastSeq())
+                    .as("input journal after the cut (%d of %d bytes)", cut, before)
+                    .isEqualTo(recordEnds.size() / 2);
             assertThatThrownBy(() -> JournalRecovery.recover(dir, eventLog, e -> {}))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("event log ends at seq");
