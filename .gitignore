@@ -31,3 +31,6 @@ data/
 
 # jqwik local failure database
 .jqwik-database
+
+# Docs site build output
+site/

@@ -81,3 +81,14 @@ build: ## Build Java jars and the web bundle (skips tests)
 clean: ## Remove build outputs
 	$(MVNW) -q clean
 	rm -rf apps/web/dist apps/web/coverage .pytest_cache .ruff_cache
+
+# Docs site (MkDocs Material). Tools come from docs/_tools/requirements.txt via uv; nothing is installed in the project.
+DOCS_RUN := uv run --no-project --python 3.12 --with-requirements docs/_tools/requirements.txt
+.PHONY: docs docs-serve
+
+docs: ## Build the docs site into site/ and check links
+	$(DOCS_RUN) mkdocs build --strict
+	$(DOCS_RUN) python docs/_tools/check_links.py site
+
+docs-serve: ## Preview the docs site with live reload at http://127.0.0.1:8000/prayog/
+	$(DOCS_RUN) mkdocs serve

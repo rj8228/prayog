@@ -60,7 +60,7 @@ asyncio.run(main())
 ```
 
 Run it with `uv run python first_bot.py` from the repository root. A fuller example with position tracking and
-risk limits: [`sdk/python/examples/sample_bot.py`](../../sdk/python/examples/sample_bot.py)
+risk limits: [`sdk/python/examples/sample_bot.py`](https://github.com/rj8228/prayog/blob/main/sdk/python/examples/sample_bot.py)
 (`uv run python sdk/python/examples/sample_bot.py --symbol INFY`).
 
 ## 4. Money and time
@@ -118,9 +118,9 @@ and shutdown.
 
 1. **Taker on a signal**: buy below a threshold, sell above (the sample bot).
 2. **Momentum**: compare a fast and a slow moving average of trade prices
-   ([`services/agents/src/prayog_agents/quoting.py`](../../services/agents/src/prayog_agents/quoting.py)).
+   ([`services/agents/src/prayog_agents/quoting.py`](https://github.com/rj8228/prayog/blob/main/services/agents/src/prayog_agents/quoting.py)).
 3. **Market maker**: quote both sides around your estimate of fair value; skew quotes against your inventory so it
-   mean-reverts; cap the inventory ([`agents.py`](../../services/agents/src/prayog_agents/agents.py), class
+   mean-reverts; cap the inventory ([`agents.py`](https://github.com/rj8228/prayog/blob/main/services/agents/src/prayog_agents/agents.py), class
    `MarketMaker`). Background: `open docs/overview/market-making.html`.
 4. **Pairs or cross-symbol**: trade one symbol on another's moves.
 

@@ -1,6 +1,7 @@
-# Publishes the interactive explainer pages in docs/overview to GitHub Pages.
-# The source pages link to repo files such as ../learnings/README.md; those would 404 on Pages,
-# so the build rewrites them (in the copies only) to github.com blob URLs.
+# Builds the documentation site with MkDocs Material and publishes it to GitHub Pages
+# (https://rj8228.github.io/prayog/). The build is strict, so a broken link between docs fails it, and
+# docs/_tools/check_links.py then checks every href/src in the built site, including the interactive HTML pages.
+# Same commands locally: make docs
 name: pages
 
 on:
@@ -8,6 +9,8 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,17 +29,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
-      - name: Assemble site
-        run: |
-          mkdir -p _site
-          cp docs/overview/*.html docs/overview/explainer.css _site/
-          # Any href/src that climbs out of docs/overview ("../x/y") points at a repo file: send it to github.com.
-          sed -i -E 's#(href|src)="\.\./([^"]*)"#\1="https://github.com/rj8228/prayog/blob/main/docs/\2"#g' _site/*.html
-          if grep -l '\(href\|src\)="\.\./' _site/*.html; then echo "unrewritten ../ links remain"; exit 1; fi
-          ls -l _site
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docs/_tools/requirements.txt
+      - name: Install MkDocs Material (pinned)
+        run: pip install -r docs/_tools/requirements.txt
+      - name: Build site
+        run: mkdocs build --strict
+      - name: Check links in the built site
+        run: python docs/_tools/check_links.py site
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: _site
+          path: site
 
   deploy:
     needs: build

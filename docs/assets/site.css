@@ -1,0 +1,93 @@
+/* Site-wide additions to Material for MkDocs. Colours come from the theme's variables, so light and dark both work. */
+
+/* Architecture diagram on the home page */
+.md-typeset figure.arch {
+  display: block;
+  width: 100%;
+  margin: 1em auto 2em;
+  max-width: 560px;
+}
+
+/* Quick links: two by two on wide screens, one column on phones */
+.md-typeset .grid.cards.quick {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+.md-typeset .arch svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--md-text-font-family, sans-serif);
+}
+.arch .arch-node {
+  fill: var(--md-default-bg-color);
+  stroke: var(--md-typeset-a-color);
+  stroke-width: 1.5;
+  transition: fill 0.15s;
+}
+.arch .arch-hot {
+  stroke-width: 2.5;
+}
+.arch .arch-planned,
+.arch .arch-dashed {
+  stroke-dasharray: 6 4;
+}
+.arch .arch-group {
+  fill: var(--md-code-bg-color);
+  stroke: var(--md-default-fg-color--lighter);
+  stroke-width: 1.2;
+}
+.arch .arch-title {
+  fill: var(--md-default-fg-color);
+  font-size: 15px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.arch .arch-sub {
+  fill: var(--md-default-fg-color--light);
+  font-size: 12px;
+  text-anchor: middle;
+}
+.arch .arch-note {
+  fill: var(--md-default-fg-color--light);
+  font-size: 12px;
+  font-style: italic;
+  text-anchor: middle;
+}
+.arch .arch-group-title {
+  fill: var(--md-typeset-a-color);
+  font-size: 14px;
+  font-weight: 700;
+}
+.arch .arch-edge {
+  fill: none;
+  stroke: var(--md-default-fg-color--light);
+  stroke-width: 1.6;
+}
+.arch .arch-head {
+  fill: var(--md-default-fg-color--light);
+}
+.arch a {
+  cursor: pointer;
+}
+.arch a:hover .arch-node,
+.arch a:focus-visible .arch-node {
+  fill: var(--md-accent-fg-color--transparent);
+  stroke: var(--md-accent-fg-color);
+}
+.arch a:hover .arch-group-title {
+  fill: var(--md-accent-fg-color);
+}
+.arch a:focus-visible {
+  outline: none;
+}
+
+/* Learning path: number each card's heading line with the accent colour */
+.md-typeset .grid.cards.path > ul > li > p:first-child strong,
+.md-typeset .grid.cards.path > ol > li > p:first-child strong {
+  color: var(--md-typeset-a-color);
+}
+
+/* Interactive page list */
+.md-typeset .grid.cards.pages > ul > li > p:first-child a {
+  font-weight: 700;
+}

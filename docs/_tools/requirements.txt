@@ -1,0 +1,4 @@
+# Docs site build only (MkDocs Material, approved 2026-10-04 in docs/BUILD_PLAN.md). Never shipped in the app.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==12.1

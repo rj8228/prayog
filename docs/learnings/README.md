@@ -6,11 +6,11 @@ What I learned building Prayog, session by session: the functional side (how exc
 - **Concepts**: each one has a checkbox. I tick it once I can explain it without notes.
 - **In an interview**: a one- or two-sentence answer I could give out loud.
 
-The longer background reading lives in [`docs/overview/functional.html`](../overview/functional.html), [`docs/overview/technical.html`](../overview/technical.html) and [`docs/overview/ring-buffer.html`](../overview/ring-buffer.html) (with an interactive simulator). The decisions themselves live in [`docs/adr/`](../adr/).
+The longer background reading lives in [`docs/overview/functional.html`](../overview/functional.html), [`docs/overview/technical.html`](../overview/technical.html) and [`docs/overview/ring-buffer.html`](../overview/ring-buffer.html) (with an interactive simulator). The decisions themselves live in [`docs/adr/`](../adr/index.md).
 
 ## Topic pages
 
-Interactive explainers in [`docs/overview/`](../overview/), each with a business example, the mechanics, a try-it panel and how Prayog uses it. Open with `open docs/overview/<name>.html`.
+Interactive explainers in [`docs/overview/`](../overview/index.md), each with a business example, the mechanics, a try-it panel and how Prayog uses it. Open with `open docs/overview/<name>.html`.
 
 | Area | Page | Covers |
 |---|---|---|

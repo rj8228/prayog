@@ -1,0 +1,170 @@
+# Documentation site for Prayog, published to GitHub Pages by .github/workflows/pages.yml.
+# Build locally:  make docs        (strict build into site/ plus the link check)
+# Preview:        make docs-serve  (live reload at http://127.0.0.1:8000/prayog/)
+site_name: Prayog
+site_description: A simulated stock exchange and bot arena. Simulated traders create the market; people trade by hand or with bots.
+site_url: https://rj8228.github.io/prayog/
+repo_url: https://github.com/rj8228/prayog
+repo_name: rj8228/prayog
+edit_uri: edit/main/docs/
+copyright: Prayog is a learning project. Public knowledge and textbook algorithms only.
+
+docs_dir: docs
+site_dir: site
+strict: true
+
+# Build helpers live next to the docs but are not part of the site.
+exclude_docs: |
+  _tools/
+
+hooks:
+  - docs/_tools/hooks.py
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/chart-line-variant
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to system preference
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+    - toc.follow
+
+plugins:
+  - search
+
+extra_css:
+  - assets/site.css
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Home: index.md
+  - Use the market:
+      - Using the market: guides/using-the-market.md
+      - Trading as a user: runbook/10-trading-as-a-user.md
+  - Build a bot:
+      - bots/README.md
+      - API reference: bots/api.md
+      - Bots runbook: runbook/11-bots.md
+  - Run & debug:
+      - runbook/README.md
+      - runbook/01-start-and-stop.md
+      - runbook/02-health-checks.md
+      - runbook/03-browser-tour.md
+      - runbook/04-identity-and-tokens.md
+      - runbook/05-data-and-messaging.md
+      - runbook/06-failure-drills.md
+      - runbook/07-debugging.md
+      - runbook/08-build-and-tests.md
+      - runbook/09-learning-pages.md
+      - runbook/12-exchange-internals.md
+  - Learn:
+      - learnings/README.md
+      - Sessions:
+          - S1 Repo skeleton: learnings/S01-repo-skeleton.md
+          - S3–S4 Contracts and order book: learnings/S03-S04-contracts-and-order-book.md
+          - S5 Market, cancel, modify: learnings/S05-market-cancel-modify.md
+          - S6 Bands, sessions, STP: learnings/S06-bands-sessions-stp.md
+          - S7 Sequencer pipeline: learnings/S07-sequencer-pipeline.md
+          - S8 Journal and replay: learnings/S08-journal-and-replay.md
+          - S2 Local infrastructure: learnings/S02-local-infrastructure.md
+          - S10–S13 Live market: learnings/S10-S13-live-market.md
+          - Industry context: learnings/industry-context.md
+      - Interactive pages:
+          - overview/index.md
+          - Functional overview: overview/functional.html
+          - Technical overview: overview/technical.html
+          - Ring buffer: overview/ring-buffer.html
+          - Journaling: overview/journaling.html
+          - SBE: overview/sbe.html
+          - FIX protocol: overview/fix-protocol.html
+          - Market data feeds: overview/market-data-feeds.html
+          - Market making: overview/market-making.html
+          - Kafka: overview/kafka.html
+          - OAuth2 and OIDC: overview/oauth-oidc.html
+          - Compose and Traefik: overview/compose-traefik.html
+          - Java Memory Model: overview/java-memory-model.html
+          - Off-heap memory: overview/java-off-heap.html
+          - GC and JIT: overview/java-gc-jit.html
+          - Modern Java: overview/modern-java.html
+  - Decisions:
+      - adr/index.md
+      - adr/0001-spring-boot-4-and-maven.md
+      - adr/0002-contracts-and-domain-types.md
+      - adr/0003-order-book-and-limit-matching.md
+      - adr/0004-commands-market-cancel-modify.md
+      - adr/0005-bands-sessions-stp-kill-switch.md
+      - adr/0006-sequencer-pipeline-and-clock.md
+      - adr/0007-journal-sbe-and-replay.md
+      - adr/0008-local-infrastructure.md
+      - adr/0009-exchange-service-gateway-market-data.md
+      - adr/0010-simulated-traders-sdk-and-web.md
+  - Project:
+      - Progress: PROGRESS.md
+      - Build plan: BUILD_PLAN.md
