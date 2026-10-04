@@ -81,6 +81,47 @@ export const api = {
     call<Journey>(`/orders/${orderId}/journey`, {}, token),
 }
 
+/**
+ * The same order calls for one of your other accounts: the label goes in the X-Prayog-Account header and the
+ * exchange derives a separate account id from your user plus the label. Strategies each trade in their own.
+ */
+export function accountApi(label: string) {
+  const headers = { 'X-Prayog-Account': label }
+  return {
+    openOrders: (token: string) =>
+      call<OpenOrder[]>('/orders', { headers }, token),
+    place: (
+      token: string,
+      order: {
+        symbol: string
+        side: Side
+        type: 'LIMIT' | 'MARKET'
+        price?: number
+        quantity: number
+      },
+    ) =>
+      call<OrderResult>(
+        '/orders',
+        { method: 'POST', body: JSON.stringify(order), headers },
+        token,
+      ),
+    cancel: (token: string, orderId: number) =>
+      call<OrderResult>(
+        `/orders/${orderId}`,
+        { method: 'DELETE', headers },
+        token,
+      ),
+    cancelAll: (token: string) =>
+      call<{ requested: number; cancelled: number }>(
+        '/orders',
+        { method: 'DELETE', headers },
+        token,
+      ),
+  }
+}
+
+export type AccountApi = ReturnType<typeof accountApi>
+
 const put = (body: unknown): RequestInit => ({
   method: 'PUT',
   body: JSON.stringify(body),

@@ -53,7 +53,7 @@ export const EXPLAIN: Record<
     label: 'Liquidity and market making',
   },
   strategies: {
-    text: 'Algorithmic strategies running in a background worker in this tab, each in its own account with its own risk limits. They use the same public API as any bot and stop when you close the tab.',
+    text: 'Textbook strategies running in this tab, each in its own account (algo-<strategy>-<symbol>) with its own risk limits checked before every order. They use the same public API as any bot; closing the tab stops them and cancels their orders.',
     link: `${DOCS}/bots/`,
     label: 'Building a bot',
   },

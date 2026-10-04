@@ -61,3 +61,40 @@ export function startPrivateFeed(
     socket?.close()
   }
 }
+
+/**
+ * The private feed of one of your accounts (`label`), for long-running clients such as strategies: each
+ * (re)connect asks for a fresh token, so it keeps working after the first token expires.
+ */
+export function startAccountFeed(
+  label: string,
+  token: () => Promise<string>,
+  onMessage: (m: unknown) => void,
+): () => void {
+  let socket: WebSocket | null = null
+  let stopped = false
+  let retry: ReturnType<typeof setTimeout> | undefined
+  const open = async () => {
+    try {
+      const t = await token()
+      if (stopped) return
+      socket = new WebSocket(
+        wsUrl(
+          `/api/v1/ws/private?account=${encodeURIComponent(label)}&access_token=${encodeURIComponent(t)}`,
+        ),
+      )
+      socket.onmessage = (event) => onMessage(JSON.parse(event.data as string))
+      socket.onclose = () => {
+        if (!stopped) retry = setTimeout(() => void open(), 2000)
+      }
+    } catch {
+      if (!stopped) retry = setTimeout(() => void open(), 5000)
+    }
+  }
+  void open()
+  return () => {
+    stopped = true
+    clearTimeout(retry)
+    socket?.close()
+  }
+}

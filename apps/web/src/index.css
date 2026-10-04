@@ -826,3 +826,135 @@ kbd {
     display: none;
   }
 }
+
+/* ---- strategies ---- */
+.strategy-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips button {
+  width: auto;
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.strategy-form details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.strategy-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.strategy-card.running {
+  border-left-color: var(--up);
+}
+
+.strategy-card.error,
+.strategy-card.stopped {
+  border-left-color: var(--down);
+}
+
+.strategy-card.done {
+  border-left-color: var(--accent);
+}
+
+.strategy-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.strategy-head .spacer {
+  flex: 1;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.badge.running {
+  color: var(--up);
+  border-color: var(--up);
+}
+
+.badge.stopped,
+.badge.error {
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.badge.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.strategy-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 4px;
+}
+
+.strategy-stats div {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+
+.spark.wide {
+  width: 140px;
+  height: 30px;
+}
+
+.strategy-log {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  max-height: 180px;
+  overflow: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+.strategy-log .fill {
+  color: var(--up);
+}
+
+.strategy-log .risk {
+  color: #f0b44c;
+}
+
+.strategy-log .error {
+  color: var(--down);
+}
