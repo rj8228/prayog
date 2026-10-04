@@ -1,0 +1,62 @@
+# Defaults for the exchange. Every value can be overridden by an environment variable, e.g.
+# prayog.exchange.clock.multiplier -> PRAYOG_EXCHANGE_CLOCK_MULTIPLIER.
+spring:
+  application:
+    name: prayog-exchange
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keys are fetched from here; inside Docker Keycloak is reachable as keycloak:8080.
+          jwk-set-uri: ${PRAYOG_JWK_SET_URI:http://auth.prayog.localhost/realms/prayog/protocol/openid-connect/certs}
+
+prayog:
+  security:
+    # Tokens must say exactly this issuer (KC_HOSTNAME pins it, ADR 0008) and include this audience.
+    issuer: ${PRAYOG_JWT_ISSUER:http://auth.prayog.localhost/realms/prayog}
+    audience: prayog-api
+  exchange:
+    journal-dir: ${PRAYOG_JOURNAL_DIR:./data/journal}
+    instruments:
+      - { symbol: INFY,     tick-size: 5,  max-order-quantity: 5000, reference-price: 150000, band-percent: 10 }
+      - { symbol: TCS,      tick-size: 5,  max-order-quantity: 2000, reference-price: 400000, band-percent: 10 }
+      - { symbol: HDFCBANK, tick-size: 5,  max-order-quantity: 5000, reference-price: 165000, band-percent: 10 }
+      - { symbol: RELIANCE, tick-size: 5,  max-order-quantity: 5000, reference-price: 290000, band-percent: 10 }
+    schedule:
+      open: ${SIM_DAY_OPEN:09:15}
+      close: ${SIM_DAY_CLOSE:15:30}
+      offset: "+05:30"
+    clock:
+      multiplier: ${SIM_CLOCK_MULTIPLIER:1}
+      start-time: ${SIM_DAY_OPEN:09:15}
+      auto-next-day: true
+      closed-pause-seconds: 30
+    pipeline:
+      ring-size: 65536
+      wait-strategy: BLOCKING
+    rate-limit:
+      orders-per-second: 20
+      burst: 40
+      bot-orders-per-second: 500
+      bot-burst: 1000
+    market-data:
+      trade-history: 2000
+      subscriber-buffer: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: prayog-exchange
+
+# Plain text locally; Compose sets LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs for one JSON object per line.
+logging:
+  level:
+    dev.prayog: INFO

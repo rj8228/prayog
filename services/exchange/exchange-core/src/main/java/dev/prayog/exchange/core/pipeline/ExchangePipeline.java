@@ -77,6 +77,16 @@ public final class ExchangePipeline implements AutoCloseable {
         return ring.tryPublishEvent(WRITE_COMMAND, Objects.requireNonNull(command, "command"), context);
     }
 
+    /** Free slots in the ring right now. Near zero means a later stage is falling behind (back-pressure). */
+    public long remainingCapacity() {
+        return ring.remainingCapacity();
+    }
+
+    /** Total slots in the ring. */
+    public int capacity() {
+        return ring.getBufferSize();
+    }
+
     /** Processes everything already published, then stops all handler threads. */
     @Override
     public void close() {

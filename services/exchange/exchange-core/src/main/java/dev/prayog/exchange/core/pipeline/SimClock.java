@@ -49,6 +49,16 @@ public final class SimClock {
         multiplier = checked(newMultiplier);
     }
 
+    /**
+     * Jumps forward to {@code simMicros} (for example the next day's open) and keeps running at the same speed from
+     * there. Never moves backwards: an earlier time is ignored, so ticks stay monotonic.
+     */
+    public synchronized void advanceTo(long simMicros) {
+        long wall = wallNanos.getAsLong();
+        anchorSimMicros = Math.max(at(wall), simMicros);
+        anchorWallNanos = wall;
+    }
+
     private long at(long wall) {
         return anchorSimMicros + (wall - anchorWallNanos) / 1_000 * multiplier;
     }

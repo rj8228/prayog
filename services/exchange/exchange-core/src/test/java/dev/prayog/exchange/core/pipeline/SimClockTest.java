@@ -43,4 +43,22 @@ class SimClockTest {
         assertThatThrownBy(() -> clock.setMultiplier(SimClock.MAX_MULTIPLIER + 1))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void advanceToJumpsForwardAndKeepsRunning() {
+        SimClock clock = new SimClock(START, 2, wall::get);
+        clock.advanceTo(START + 1_000_000);
+        wall.addAndGet(1_000_000); // 1 ms of wall time at 2x
+
+        assertThat(clock.now()).isEqualTo(START + 1_000_000 + 2_000);
+    }
+
+    @Test
+    void advanceToNeverMovesBackwards() {
+        SimClock clock = new SimClock(START, 1, wall::get);
+        wall.addAndGet(5_000_000);
+        clock.advanceTo(START);
+
+        assertThat(clock.now()).isEqualTo(START + 5_000);
+    }
 }

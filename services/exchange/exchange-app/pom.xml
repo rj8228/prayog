@@ -14,4 +14,60 @@
     <artifactId>exchange-app</artifactId>
     <name>exchange-app</name>
     <description>Spring Boot process: gateway, sequencer, matching engine and market-data publisher.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.prayog</groupId>
+            <artifactId>exchange-core</artifactId>
+        </dependency>
+        <!-- WebFlux (BUILD_PLAN 16.2 #17): REST and WebSocket on Netty, no servlet stack. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <!-- Keycloak-issued JWTs (BUILD_PLAN 16.2 #21). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Agrona needs this export in every JVM that loads it (ADR 0007). -->
+                    <jvmArguments>${agrona.jvm.args}</jvmArguments>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
