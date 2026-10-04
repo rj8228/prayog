@@ -11,11 +11,11 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S3 Contracts and domain types (5 h) — ADR 0002
 - [x] S4 Order book and limit matching (6 h) — ADR 0003
 
-## M2 Engine complete
+## M2 Engine complete (done 2026-10-04)
 - [x] S5 Market, cancel, modify (6 h) — ADR 0004
 - [x] S6 Price bands, sessions, self-trade prevention (5 h) — ADR 0005
 - [x] S7 Sequencer and single-writer pipeline (6 h) — ADR 0006
-- [ ] S8 Journal and deterministic replay (6 h)
+- [x] S8 Journal and deterministic replay (6 h) — ADR 0007
 
 ## M3 Runnable app
 - [ ] S2 Local infrastructure (5 h)

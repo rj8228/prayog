@@ -17,6 +17,7 @@ The longer background reading lives in [`docs/overview/functional.html`](../over
 | S5 Market, cancel, modify | [S05-market-cancel-modify.md](S05-market-cancel-modify.md) | Commands and event sourcing, modify semantics, queue priority, information leaks, test coverage |
 | S6 Bands, sessions, STP | [S06-bands-sessions-stp.md](S06-bands-sessions-stp.md) | Price bands, session states, DAY expiry, self-trade prevention, kill switch |
 | S7 Sequencer pipeline | [S07-sequencer-pipeline.md](S07-sequencer-pipeline.md) | Single writer, ring buffers, back-pressure, wait strategies, simulated clock, testing concurrency |
+| S8 Journal and replay | [S08-journal-and-replay.md](S08-journal-and-replay.md) | Write-ahead journal, fsync and group commit, torn writes and CRC, SBE, deterministic replay checksums |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far
