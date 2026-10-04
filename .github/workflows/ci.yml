@@ -42,7 +42,7 @@ jobs:
       - run: make replay-check
 
   stack:
-    name: Local stack smoke test
+    name: Local stack smoke and end-to-end test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +51,12 @@ jobs:
       # Starts the infra profile and waits until every service reports healthy (S2 acceptance).
       - run: make up
       - run: make smoke
+      # Correctness of the live market: feed integrity, liquidity, a bot round trip and replay of the live journal.
+      - uses: astral-sh/setup-uv@v10.2.0 # no moving major tag is published
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: E2E_SECONDS=20 make e2e
       - name: Show service state and logs
         if: failure()
         run: |

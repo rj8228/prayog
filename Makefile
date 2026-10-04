@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help env up down ps logs smoke reset test test-java test-python test-web replay-check fmt lint build clean install
+.PHONY: help env up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
@@ -37,6 +37,9 @@ logs: ## Follow stack logs (all services, or SERVICE=name)
 
 smoke: ## Check the running stack end to end (S2 acceptance)
 	./deploy/compose/smoke.sh
+
+e2e: ## Check the running market end to end: feed integrity, liquidity, a bot round trip, live journal replay
+	./deploy/compose/e2e.sh
 
 reset: ## Stop the stack and DELETE its data volumes (databases, Kafka log, Redis)
 	$(COMPOSE) --profile '*' down -v
