@@ -1,8 +1,11 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help up down test test-java test-python test-web replay-check fmt lint build logs clean install
+.PHONY: help env up down ps logs smoke reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
+# The stack reads secrets from the root .env (git-ignored). `make env` creates one.
+COMPOSE := docker compose --env-file .env -f deploy/compose/compose.yaml
+PROFILES ?= infra
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -11,11 +14,31 @@ install: ## Install Python and web dependencies
 	uv sync
 	pnpm install --frozen-lockfile
 
-up: ## Start the local stack (Docker Compose arrives in S2)
-	@echo "make up: Docker Compose stack arrives in Session S2."
+env: ## Create .env from .env.example with random local secrets (keeps an existing .env)
+	@if [ -f .env ]; then echo ".env already exists; leaving it alone."; else \
+		while IFS= read -r line; do \
+			case "$$line" in *=change-me) echo "$${line%change-me}$$(openssl rand -hex 16)";; *) echo "$$line";; esac; \
+		done < .env.example > .env; \
+		echo "Created .env with random local secrets."; fi
 
-down: ## Stop the local stack (Docker Compose arrives in S2)
-	@echo "make down: Docker Compose stack arrives in Session S2."
+up: ## Start the stack and wait until every service is healthy (PROFILES=infra by default)
+	@test -f .env || { echo "No .env: run 'make env' first."; exit 1; }
+	$(COMPOSE) --profile $(PROFILES) up -d --wait --wait-timeout 300
+
+down: ## Stop the stack (data volumes are kept)
+	$(COMPOSE) --profile '*' down
+
+ps: ## Show stack services and their health
+	$(COMPOSE) --profile '*' ps -a
+
+logs: ## Follow stack logs (all services, or SERVICE=name)
+	$(COMPOSE) --profile '*' logs -f --tail=100 $(SERVICE)
+
+smoke: ## Check the running stack end to end (S2 acceptance)
+	./deploy/compose/smoke.sh
+
+reset: ## Stop the stack and DELETE its data volumes (databases, Kafka log, Redis)
+	$(COMPOSE) --profile '*' down -v
 
 test: test-java test-python test-web ## Build and test everything
 
@@ -50,9 +73,6 @@ lint: ## Lint without changing files
 build: ## Build Java jars and the web bundle (skips tests)
 	$(MVNW) -DskipTests package
 	pnpm -r build
-
-logs: ## Tail service logs (Docker Compose arrives in S2)
-	@echo "make logs: Docker Compose stack arrives in Session S2."
 
 clean: ## Remove build outputs
 	$(MVNW) -q clean

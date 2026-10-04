@@ -1,0 +1,147 @@
+{
+  "realm": "prayog",
+  "displayName": "Prayog",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "trader", "description": "Places and manages own orders" },
+      { "name": "ops", "description": "Market operations: sessions, halts, kill switch" },
+      { "name": "bot", "description": "Automated trading client (client credentials)" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "prayog-web",
+      "name": "Prayog web terminal",
+      "description": "Browser app: public client, authorization code flow with PKCE",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://app.prayog.localhost/*"],
+      "webOrigins": ["http://app.prayog.localhost"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://app.prayog.localhost/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience prayog-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "prayog-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "prayog-api",
+      "name": "Prayog API",
+      "description": "The gateway as a resource server. No login flows: it only appears as the audience of tokens.",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "prayog-bot-demo",
+      "name": "Demo bot",
+      "description": "Sample bot (S12): confidential client, client credentials. Its 'API key' is client id + secret.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${PRAYOG_BOT_DEMO_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience prayog-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "prayog-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "prayog-agents",
+      "name": "Simulated traders",
+      "description": "The simulated-trader service (S13): confidential client, client credentials.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${PRAYOG_AGENTS_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience prayog-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "prayog-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "trader1",
+      "enabled": true,
+      "email": "trader1@prayog.localhost",
+      "emailVerified": true,
+      "firstName": "Trader",
+      "lastName": "One",
+      "credentials": [{ "type": "password", "value": "${PRAYOG_TRADER1_PASSWORD}", "temporary": false }],
+      "realmRoles": ["default-roles-prayog", "trader"]
+    },
+    {
+      "username": "ops1",
+      "enabled": true,
+      "email": "ops1@prayog.localhost",
+      "emailVerified": true,
+      "firstName": "Ops",
+      "lastName": "One",
+      "credentials": [{ "type": "password", "value": "${PRAYOG_OPS1_PASSWORD}", "temporary": false }],
+      "realmRoles": ["default-roles-prayog", "ops"]
+    },
+    {
+      "username": "service-account-prayog-bot-demo",
+      "enabled": true,
+      "serviceAccountClientId": "prayog-bot-demo",
+      "realmRoles": ["default-roles-prayog", "bot"]
+    },
+    {
+      "username": "service-account-prayog-agents",
+      "enabled": true,
+      "serviceAccountClientId": "prayog-agents",
+      "realmRoles": ["default-roles-prayog", "bot"]
+    }
+  ]
+}

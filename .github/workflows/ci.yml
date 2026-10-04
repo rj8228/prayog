@@ -41,6 +41,24 @@ jobs:
       # makes a determinism break visible by name.
       - run: make replay-check
 
+  stack:
+    name: Local stack smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Random throwaway secrets, exactly as a developer gets them; nothing secret is stored in the repo.
+      - run: make env
+      # Starts the infra profile and waits until every service reports healthy (S2 acceptance).
+      - run: make up
+      - run: make smoke
+      - name: Show service state and logs
+        if: failure()
+        run: |
+          make ps
+          docker compose --env-file .env -f deploy/compose/compose.yaml --profile '*' logs --tail=200
+      - if: always()
+        run: make down
+
   python:
     name: Python (uv)
     runs-on: ubuntu-latest
