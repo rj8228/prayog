@@ -3,7 +3,14 @@ name = "prayog-sdk"
 version = "0.1.0"
 description = "Python client for the Prayog exchange: connect, authenticate, subscribe, trade."
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.13.5",
+    "websockets>=17.2",
+]
+
+[project.scripts]
+prayog = "prayog_sdk.cli:main"
 
 [build-system]
 requires = ["hatchling"]
