@@ -21,6 +21,8 @@ Interactive explainers in [`docs/overview/`](../overview/), each with a business
 | Platform | [kafka.html](../overview/kafka.html) | Kafka basics: log, topics, partitions, offsets, consumer groups, delivery guarantees, KRaft, listeners (S2) |
 | Platform | [oauth-oidc.html](../overview/oauth-oidc.html) | OAuth2 and OpenID Connect with Keycloak: clients, PKCE, client credentials, JWT claims and validation (S2) |
 | Platform | [compose-traefik.html](../overview/compose-traefik.html) | Containers, Docker Compose, health checks, volumes, reverse proxying with Traefik (S2) |
+| Trading infrastructure | [market-data-feeds.html](../overview/market-data-feeds.html) | Level 1/2/3, snapshot plus deltas, sequence gaps, slow consumers, multicast feeds; drop-a-message simulator (S11) |
+| Trading infrastructure | [market-making.html](../overview/market-making.html) | Spread, inventory skew, adverse selection, self-trade and reconciliation traps; market-maker simulator (S13) |
 | Core Java | [java-memory-model.html](../overview/java-memory-model.html) | Happens-before, volatile, release/acquire, CAS, cache lines, false sharing, litmus test |
 | Core Java | [java-off-heap.html](../overview/java-off-heap.html) | Heap vs direct vs mapped buffers, Unsafe, VarHandle, FFM API, Agrona, `--add-exports`, endianness |
 | Core Java | [java-gc-jit.html](../overview/java-gc-jit.html) | Allocation, collectors (G1, ZGC), garbage-free code, JIT tiers, warm-up, safepoints, JMH, coordinated omission |
@@ -37,6 +39,7 @@ Interactive explainers in [`docs/overview/`](../overview/), each with a business
 | S6 Bands, sessions, STP | [S06-bands-sessions-stp.md](S06-bands-sessions-stp.md) | Price bands, session states, DAY expiry, self-trade prevention, kill switch |
 | S7 Sequencer pipeline | [S07-sequencer-pipeline.md](S07-sequencer-pipeline.md) | Single writer, ring buffers, back-pressure, wait strategies, simulated clock, testing concurrency |
 | S8 Journal and replay | [S08-journal-and-replay.md](S08-journal-and-replay.md) | Write-ahead journal, fsync and group commit, torn writes and CRC, SBE, deterministic replay checksums |
+| S10–S13 Live market | [S10-S13-live-market.md](S10-S13-live-market.md) | Gateway, recovery, derived market data, feeds and gaps, account ids, market making, reconciliation, e2e correctness |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far

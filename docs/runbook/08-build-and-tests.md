@@ -3,11 +3,14 @@
 | What | Command | Expect |
 |---|---|---|
 | Everything (Java, Python, web) | `make test` | `BUILD SUCCESS`, ruff `All checks passed!`, pytest and vitest passing |
-| Java only | `make test-java` | `contracts` 49 tests, `exchange-core` 105 tests |
+| Java only | `make test-java` | `contracts` 49, `exchange-core` 121, `exchange-app` 8 tests |
 | One Java module | `./mvnw -pl services/exchange/exchange-core -am test` | Only that module and what it depends on |
 | One Java test class | `./mvnw -pl services/exchange/exchange-core -am test -Dtest=FileJournalTest -Dsurefire.failIfNoSpecifiedTests=false` | Just that class |
 | Deterministic replay check | `make replay-check` | `replay-check: 51001 commands, ~69000 events, sha256 ...` and `BUILD SUCCESS` |
 | Stack acceptance | `make smoke` | `All checks passed.` (stack must be up) |
+| Live market correctness | `make e2e` (`E2E_SECONDS=60` to watch longer) | `20/20 checks passed`, replay `MATCH`, `E2E passed.` |
+| Python only | `uv run pytest -q` | SDK and agents tests |
+| Web only | `cd apps/web && pnpm test` | Vitest |
 | Format code | `make fmt` | Rewrites Java, Python and web files to the project style |
 | Lint without changing | `make lint` | Exit code 0; it prints each tool's command (Spotless, Ruff, ESLint) |
 
@@ -19,7 +22,7 @@ Notes:
 ## CI
 
 Every push to `main` runs `.github/workflows/ci.yml`: Java (Maven), Python (uv), Web (pnpm), Replay determinism check,
-Local stack smoke test. See them with:
+Local stack smoke and end-to-end test (builds the images, starts everything, `make smoke`, `make e2e`). See them with:
 
 ```sh
 gh run list --limit 5

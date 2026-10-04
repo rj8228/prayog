@@ -19,14 +19,14 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 ## M3 Runnable app
 - [x] S2 Local infrastructure (5 h) — ADR 0008
-- [ ] S10 Gateway (6 h)
-- [ ] S11 Market data (5 h)
-- [ ] S12 Python SDK and sample bot (5 h)
-- [ ] S13 Simulated traders (7 h)
+- [x] S10 Gateway (6 h) — ADR 0009
+- [x] S11 Market data (5 h) — ADR 0009
+- [x] S12 Python SDK and sample bot (5 h) — ADR 0010
+- [x] S13 Simulated traders (7 h) — ADR 0010
 - [ ] S15 Kafka publisher (5 h)
 - [ ] S16 Post-trade service (7 h)
 - [ ] S17 Leaderboard (3 h)
-- [ ] S18 Trading terminal (8 h)
+- [ ] S18 Trading terminal (8 h) — first slice done (market view, sign-in, order ticket, my orders and fills; ADR 0010); full terminal remains
 - [ ] S19 Blotter, P&L and ops page (6 h)
 
 ## M4 Hardening layers

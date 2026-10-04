@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * Order entry. Every answer is sent only after the command is in the journal (ADR 0006), and describes exactly what
@@ -104,7 +106,7 @@ public class OrdersController {
                 type == OrderType.MARKET ? 0 : body.price(),
                 body.quantity());
         long started = System.nanoTime();
-        return Mono.fromFuture(exchange.submit(order))
+        return answer(exchange.submit(order))
                 .map(r -> Results.ofNewOrder(r, clientOrderId, body.symbol()))
                 .doOnNext(result -> record("new", result, trader, started));
     }
@@ -166,7 +168,7 @@ public class OrdersController {
         Trader trader = Traders.from(auth, label);
         List<OrderTracker.OpenOrder> open = market.openOrders(trader.accountId());
         return Flux.fromIterable(open)
-                .concatMap(o -> Mono.fromFuture(exchange.submit(
+                .concatMap(o -> answer(exchange.submit(
                         new CancelOrder(UUID.randomUUID().toString(), trader.accountId(), o.symbol(), o.orderId()))))
                 .filter(r -> r.events().stream().anyMatch(e -> e instanceof dev.prayog.contracts.event.OrderCancelled))
                 .count()
@@ -175,8 +177,17 @@ public class OrdersController {
 
     private Mono<OrderResult> submitChange(
             dev.prayog.exchange.core.Command command, long orderId, String clientOrderId, String symbol) {
-        return Mono.fromFuture(exchange.submit(command))
+        return answer(exchange.submit(command))
                 .map((CommandResult r) -> Results.ofChange(r, orderId, clientOrderId, symbol));
+    }
+
+    /**
+     * Waits for the journaled result, then continues on a worker thread. Without the hop, building the answer, metrics,
+     * logging and the HTTP write would all run on the pipeline's outbound thread that completes the future, delaying
+     * market data for everyone.
+     */
+    private static Mono<CommandResult> answer(CompletableFuture<CommandResult> pending) {
+        return Mono.fromFuture(pending).publishOn(Schedulers.parallel());
     }
 
     // Cancels and modifies need the symbol; an order we don't know (or that isn't the caller's) is a plain 404.

@@ -33,3 +33,9 @@ make smoke                     # which capability is broken?
 | Login page loops or `Invalid parameter: redirect_uri` | Wrong host name (e.g. `127.0.0.1` instead of `app.prayog.localhost`) | Always use the `*.prayog.localhost` names |
 | Browser can't find `*.prayog.localhost` (Safari, some tools) | Tool doesn't map `.localhost` to your machine | Add the `/etc/hosts` line from the main README, or use Chrome/Firefox |
 | A shell variable holding a command does nothing (zsh) | zsh doesn't split `$VAR` into words | Write the command out, or use the `dc` alias |
+| Web app: calls fail with 401, `WWW-Authenticate: ... Jwt expired` just after signing in | The Mac slept; Docker Desktop's VM clock lags until it resyncs, so Keycloak minted an already-old token | Wait a minute (compare `date -u` with `docker exec prayog-exchange-1 date -u`), then sign in again |
+| Long runs stop progressing for minutes at a time | The Mac goes to sleep and pauses everything | Run long sessions with `caffeinate -i make e2e` or keep the lid open |
+| Traefik answers 404 for `api.` after changing services | A container from an old compose file still claims the same router name | `make up` removes orphans; or `docker ps` and remove the stray container |
+| Image build hangs at `pnpm install` | Corepack waiting for a download prompt | `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` (already set in `web.Dockerfile`) |
+| Exchange container restarts or `unhealthy` | Read why | `docker logs prayog-exchange-1 2>&1 \| tail -50`; journal errors stop it on purpose (fail safe) |
+| The book in the browser says `resyncing` | It missed a feed message (seq gap) | Nothing: it resubscribes and gets a fresh snapshot within a second |

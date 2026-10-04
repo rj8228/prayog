@@ -13,6 +13,8 @@ Open any page with `open docs/overview/<name>.html` (they work offline).
 | `kafka.html` | Topics, partitions, consumer groups | Produce/consume/crash simulator |
 | `oauth-oidc.html` | OAuth2, OIDC, PKCE, JWT | PKCE calculator, JWT decoder |
 | `compose-traefik.html` | Compose, health checks, reverse proxy | Start-order and routing demos |
+| `market-data-feeds.html` | Snapshots, deltas, sequence numbers, gap recovery | Feed simulator with dropped messages |
+| `market-making.html` | Spread, inventory skew, self-trade traps, reconciliation | Market-maker simulator |
 | `java-memory-model.html` | Happens-before, volatile, false sharing | Litmus test |
 | `java-off-heap.html` | Buffers, Unsafe, VarHandle, FFM | Endianness explorer |
 | `java-gc-jit.html` | GC, JIT, latency measurement | Tail-latency simulator |

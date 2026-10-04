@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market Data Feeds</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  .books { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .bk { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); }
+  .bk h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .bk table { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .bk td { padding: 1px 6px; border: none; }
+  .ask { color: var(--hot); } .bid { color: var(--ok); }
+  @media (max-width: 600px) { .books { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#scoreboard">2. A business example</a>
+  <a href="#levels">3. Level 1, 2, 3</a>
+  <a href="#snapdelta">4. Snapshot plus deltas</a>
+  <a href="#seq">5. Sequence numbers</a>
+  <a href="#sim">6. Try it: drop a message</a>
+  <a href="#slow">7. Slow consumers</a>
+  <a href="#real">8. How real exchanges do it</a>
+  <a href="#prayog">9. In Prayog</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>Market-data feeds</h1>
+<p class="lede">How an exchange tells thousands of clients what its order book looks like, many times a second, so that every client's copy is exactly right, and how a client knows when it isn't.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>The order book changes with almost every order. Sending the whole book on every change would waste bandwidth; sending only changes is efficient but fragile: miss one and your copy is wrong forever, silently. Traders act on that copy. A wrong best price means wrong trades.</p>
+<p>So a feed has to be cheap (only changes), exact (nothing applied twice or skipped) and self-checking (a missed message is noticed at once).</p>
+
+<h2 id="scoreboard">2. A business example: the cricket scoreboard</h2>
+<p>A radio commentator doesn't read out the full scorecard after every ball. When you tune in they give you the score ("India 142 for 3 after 20 overs"); after that they only say what changed ("four runs", "wicket"). Each ball is numbered: over 20, ball 3. If you hear ball 5 right after ball 3, you know you missed one and you wait for the next full score update instead of guessing.</p>
+<p>Full score = <strong>snapshot</strong>. Each ball = <strong>delta</strong>. Over.ball = <strong>sequence number</strong>.</p>
+
+<h2 id="levels">3. Level 1, 2 and 3 data</h2>
+<div class="table-wrap"><table>
+  <tr><th>Level</th><th>Contains</th><th>Used for</th></tr>
+  <tr><td>Level 1 (top of book)</td><td>Best bid, best ask, last trade</td><td>Tickers, simple displays</td></tr>
+  <tr><td>Level 2 (market by price)</td><td>Total quantity and order count at each price level</td><td>Depth ladders, most trading bots. <strong>What Prayog publishes.</strong></td></tr>
+  <tr><td>Level 3 (market by order)</td><td>Every individual order, with its id and queue position</td><td>Strategies that model their place in the queue</td></tr>
+</table></div>
+
+<h2 id="snapdelta">4. Snapshot plus deltas</h2>
+<ol class="steps">
+  <li>On connect, the client gets a <strong>snapshot</strong>: the whole book for each symbol, stamped with a sequence number <code>seq = N</code>.</li>
+  <li>Then only <strong>deltas</strong>: "level 1,507.65 on the ask side is now 40 shares, 1 order" (0 shares = level gone), and trades. Each is stamped <code>N+1</code>, <code>N+2</code>...</li>
+  <li>The client applies each delta to its copy. As long as no number is skipped, its book equals the exchange's.</li>
+</ol>
+<p>The hard part on the exchange side is the hand-over: the snapshot and the first delta a new client receives must be consecutive. If a change slips in between taking the snapshot and registering the client, that client misses it forever.</p>
+
+<h2 id="seq">5. Sequence numbers: noticing what you missed</h2>
+<p>Each message carries <code>seq</code>, one more than the previous message for that symbol. The client's rule is simple: if <code>seq != last + 1</code>, stop trusting the book and resynchronise. There are two ways:</p>
+<ul>
+  <li><strong>Re-snapshot</strong>: reconnect or ask for a new snapshot, then continue from there. Simple; Prayog does this.</li>
+  <li><strong>Retransmission</strong>: ask a recovery server for exactly the missing numbers. Faster for big books; used on UDP feeds where loss is normal.</li>
+</ul>
+
+<h2 id="sim">6. Try it: drop a message</h2>
+<p>The exchange's book changes; deltas stream to a client. Press "Drop next message" to lose one in transit and watch the client notice and resync.</p>
+<div class="sim">
+  <div class="controls">
+    <button class="primary" id="tick">Next change</button>
+    <button id="auto">Auto</button>
+    <button id="drop">Drop next message</button>
+    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--fg)"><input type="checkbox" id="noCheck"> client ignores seq (bad client)</label>
+  </div>
+  <div class="books">
+    <div class="bk"><h4>Exchange book</h4><table id="exBook"></table></div>
+    <div class="bk"><h4 id="clTitle">Client copy</h4><table id="clBook"></table></div>
+  </div>
+  <div class="out" id="feedLog" style="margin-top:10px;max-height:150px;overflow-y:auto"></div>
+</div>
+
+<h2 id="slow">7. Slow consumers</h2>
+<p>One client on a slow network can't read as fast as the market changes. The exchange's options:</p>
+<div class="table-wrap"><table>
+  <tr><th>Option</th><th>Effect</th></tr>
+  <tr><td>Buffer without limit</td><td>Memory grows until the exchange falls over. Never.</td></tr>
+  <tr><td>Slow everyone down</td><td>One bad client hurts all. Never.</td></tr>
+  <tr><td><strong>Disconnect after a bounded buffer</strong></td><td>The client reconnects and gets a fresh snapshot. Prayog: 10,000 messages.</td></tr>
+  <tr><td>Conflate</td><td>Send only the latest state per level, skipping intermediate changes. Common for displays.</td></tr>
+</table></div>
+
+<h2 id="real">8. How real exchanges do it</h2>
+<p>High-volume venues typically publish binary messages (often <a href="sbe.html">SBE</a> or venue-specific formats) over <strong>UDP multicast</strong>: one packet reaches every subscriber, with no per-client cost. Packets can be lost, so they publish two identical copies over separate networks (A and B feeds; the client takes whichever arrives first) and run recovery services for retransmission and snapshots. Nasdaq's ITCH protocol over MoldUDP64 is a well-documented public example. Over the internet, retail-facing feeds use TCP or WebSocket, as Prayog does.</p>
+
+<h2 id="prayog">9. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Piece</th><th>Where</th></tr>
+  <tr><td>Book derived from events, after the journal</td><td><code>OrderTracker</code> (exchange-core): property-tested to equal the engine's book after every command</td></tr>
+  <tr><td>Only whole commands' changes are published</td><td>An incoming order passes through states that never really existed; only the state between commands is sent</td></tr>
+  <tr><td>Snapshot and first delta consecutive</td><td><code>MarketHub</code>: subscribing and publishing share one lock</td></tr>
+  <tr><td>Per-symbol <code>seq</code>, gap detection</td><td>Python <code>LocalBook</code> raises <code>SequenceGap</code>; the web app marks the book "resyncing" and reconnects</td></tr>
+  <tr><td>Slow consumers</td><td>Disconnected after 10,000 queued messages</td></tr>
+  <tr><td>Proof</td><td><code>make e2e</code> rebuilds every book from the live feed and requires it to equal the REST snapshot at the same <code>seq</code></td></tr>
+</table></div>
+
+<h2 id="faq">10. Questions</h2>
+<h3>Why not send the book only, every second?</h3>
+<p>Traders would see changes up to a second late and miss everything in between, including trades. Deltas give every change as it happens; periodic snapshots are a recovery tool, not the main feed.</p>
+<h3>Why number per symbol rather than one global number?</h3>
+<p>A client watching only INFY would otherwise see gaps whenever TCS changed. Per-symbol numbers let each subscription check itself.</p>
+<h3>Why derive the book from events instead of reading the engine's?</h3>
+<p>The engine belongs to one thread (the single writer). Reading its book from another thread would need locks on the order path. Deriving it from the events the engine already emits keeps the engine untouched, and the property test proves the two never differ.</p>
+
+<footer>Prayog learning pages &middot; S11 &middot; Public sources: Nasdaq TotalView-ITCH and MoldUDP64 specifications; FIX market data messages. Related: <a href="kafka.html">Kafka</a>, <a href="market-making.html">market making</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let ex, cl, seq, clSeq, dropNext, stale, timer, rnd;
+  function reset() {
+    ex = { bids: { 149900: 30, 149850: 50, 149800: 20 }, asks: { 150000: 25, 150050: 40, 150100: 60 } };
+    cl = JSON.parse(JSON.stringify(ex)); seq = 100; clSeq = 100; dropNext = false; stale = false;
+    let s = 7; rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    $("feedLog").textContent = "Client subscribed: snapshot at seq 100. Both books match.";
+    draw();
+  }
+  function table(book, mark) {
+    const asks = Object.keys(book.asks).map(Number).sort((a, b) => b - a);
+    const bids = Object.keys(book.bids).map(Number).sort((a, b) => b - a);
+    const row = (cls, p, q) => `<tr class="${cls}"><td>${(p / 100).toFixed(2)}</td><td>${q}</td></tr>`;
+    return asks.map(p => row("ask", p, book.asks[p])).join("") + `<tr><td colspan=2 style="color:var(--muted)">---</td></tr>` +
+      bids.map(p => row("bid", p, book.bids[p])).join("") + (mark ? `<tr><td colspan=2>${mark}</td></tr>` : "");
+  }
+  const same = () => JSON.stringify(ex) === JSON.stringify(cl);
+  function draw() {
+    $("exBook").innerHTML = table(ex, `seq ${seq}`);
+    const verdict = stale ? '<span class="bad">resyncing...</span>' : same() ? '<span class="good">matches</span>' : '<span class="bad">WRONG, and it doesn\'t know</span>';
+    $("clBook").innerHTML = table(cl, `seq ${clSeq} &middot; ${verdict}`);
+  }
+  const log = m => { $("feedLog").textContent = m + "\n" + $("feedLog").textContent; };
+  function change() {
+    const side = rnd() < 0.5 ? "bids" : "asks";
+    const prices = Object.keys(ex[side]).map(Number);
+    const p = prices[Math.floor(rnd() * prices.length)];
+    const q = Math.max(0, ex[side][p] + Math.round((rnd() - 0.5) * 40));
+    if (q === 0) delete ex[side][p]; else ex[side][p] = q;
+    if (Object.keys(ex[side]).length < 2) ex[side][side === "bids" ? Math.min(...prices) - 50 : Math.max(...prices) + 50] = 20;
+    seq++;
+    const msg = { seq, side, p, q };
+    if (dropNext) { dropNext = false; log(`seq ${seq}: ${side === "bids" ? "bid" : "ask"} ${(p / 100).toFixed(2)} -> ${q}   LOST IN TRANSIT`); draw(); return; }
+    receive(msg);
+  }
+  function receive(m) {
+    const ignore = $("noCheck").checked;
+    if (stale) { log(`seq ${m.seq}: ignored while resyncing`); return resync(); }
+    if (!ignore && m.seq !== clSeq + 1) {
+      stale = true; log(`seq ${m.seq} arrived but expected ${clSeq + 1}: GAP. Client stops trusting its book and resubscribes.`); draw();
+      return setTimeout(resync, 600);
+    }
+    clSeq = m.seq;
+    if (m.q === 0) delete cl[m.side][m.p]; else cl[m.side][m.p] = m.q;
+    log(`seq ${m.seq}: ${m.side === "bids" ? "bid" : "ask"} ${(m.p / 100).toFixed(2)} -> ${m.q}${ignore && !same() ? "   (applied blindly)" : ""}`);
+    draw();
+  }
+  function resync() {
+    if (!stale) return;
+    cl = JSON.parse(JSON.stringify(ex)); clSeq = seq; stale = false;
+    log(`fresh snapshot at seq ${seq}: client book correct again`); draw();
+  }
+  $("tick").onclick = change;
+  $("drop").onclick = () => { dropNext = true; log("(the next message will be lost)"); };
+  $("auto").onclick = () => { if (timer) { clearInterval(timer); timer = null; $("auto").textContent = "Auto"; } else { timer = setInterval(change, 700); $("auto").textContent = "Stop"; } };
+  reset();
+})();
+</script>
+</body>
+</html>

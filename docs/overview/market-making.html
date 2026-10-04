@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market Making Explained</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  canvas { width: 100%; height: 220px; display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; font-size: 14px; }
+  .stats div { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .stats b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#what">1. What a market maker does</a>
+  <a href="#shop">2. A business example</a>
+  <a href="#spread">3. The spread pays</a>
+  <a href="#inventory">4. Inventory risk and skew</a>
+  <a href="#adverse">5. Adverse selection</a>
+  <a href="#sim">6. Try it</a>
+  <a href="#traps">7. Engineering traps we hit</a>
+  <a href="#prayog">8. Prayog's market maker</a>
+  <a href="#faq">9. Questions</a>
+</nav>
+<main>
+<h1>Market making</h1>
+<p class="lede">Someone has to be willing to buy when you want to sell and sell when you want to buy. That's a market maker: it always shows a price on both sides and earns the difference. This page explains the economics, the risks, and two engineering bugs Prayog's own market maker had.</p>
+
+<h2 id="what">1. What a market maker does</h2>
+<p>It keeps <strong>quotes</strong> on both sides of the book: a bid (the price it will buy at) and an ask (the price it will sell at), usually several levels deep. Anyone who wants to trade right now can trade with it. It provides <strong>liquidity</strong>; the people who trade against it <strong>take</strong> liquidity.</p>
+<p>Exchanges want market makers because a market with no one quoting is a market where nobody can trade. Many venues have formal programmes with obligations (quote a minimum size within a maximum spread for most of the day) and fee rebates in return.</p>
+
+<h2 id="shop">2. A business example: the currency exchange booth</h2>
+<p>An airport currency booth shows two prices for dollars: "We buy at 82.10, we sell at 83.90". It doesn't care which way you trade; it earns ₹1.80 on every dollar that goes in and comes back out. Its risks:</p>
+<ul>
+  <li>If everyone sells dollars to it and no one buys, it ends the day holding a pile of dollars (<strong>inventory</strong>). If the rupee strengthens overnight, those dollars are worth less.</li>
+  <li>So when the pile grows, it lowers both prices: buying dollars less eagerly and selling them more cheaply until the pile shrinks (<strong>skew</strong>).</li>
+  <li>If a customer knows something the booth doesn't ("the rate is about to jump"), the booth loses on that trade (<strong>adverse selection</strong>).</li>
+</ul>
+
+<h2 id="spread">3. The spread pays</h2>
+<p>Buy at the bid, sell at the ask, keep the difference. If the market maker quotes 1,507.20 / 1,507.45 and both sides fill, it earns ₹0.25 per share. With thousands of round trips a day, tiny spreads add up. Competition between market makers pushes spreads down, which is good for everyone else.</p>
+
+<h2 id="inventory">4. Inventory risk and skew</h2>
+<p>Fills don't arrive in pairs. A run of sells against the market maker leaves it long, exposed to the price falling. The standard response is to move both quotes against the inventory:</p>
+<pre><code>center = fair_value - skew × inventory
+bid    = center - half_spread
+ask    = center + half_spread</code></pre>
+<p>Long inventory lowers the center: the ask becomes more attractive (inventory goes out), the bid less attractive (less comes in). A hard limit stops it adding to a position at all past a maximum.</p>
+
+<h2 id="adverse">5. Adverse selection</h2>
+<p>Noise traders trade for their own reasons; against them the market maker earns the spread. <strong>Informed</strong> traders trade because they know the price is about to move; they buy just before it rises. Every fill against an informed trader is a loss. The market maker's spread must cover its losses to informed flow, which is why spreads widen when news is likely (a volatile scenario) and why fast price updates matter.</p>
+
+<h2 id="sim">6. Try it</h2>
+<p>A fair value wanders. A market maker quotes around it with your settings; traders arrive at random. Some are informed: they know where fair value will be a moment later. Watch the profit and the inventory.</p>
+<div class="sim">
+  <div class="form-grid">
+    <label>half spread (ticks): <span id="hsV"></span><input type="range" id="hs" min="1" max="10" value="3"></label>
+    <label>skew per lot (ticks): <span id="skV"></span><input type="range" id="sk" min="0" max="3" step="0.25" value="0.5"></label>
+    <label>informed traders: <span id="inV"></span><input type="range" id="inf" min="0" max="60" value="10"></label>
+    <label>volatility: <span id="voV"></span><input type="range" id="vol" min="1" max="10" value="3"></label>
+  </div>
+  <canvas id="cv" width="900" height="220" aria-label="Fair value and market maker quotes over time, with inventory below"></canvas>
+  <div class="stats" id="stats"></div>
+  <div class="controls" style="margin-top:10px"><button class="primary" id="run">Run 2,000 steps again</button></div>
+</div>
+<p>Try: raise informed traders to 50% with a 1-tick spread (profit turns negative: they only trade when they know you're wrong); then widen the spread until it covers them. Set skew to 0 and watch the inventory wander; raise it and inventory stays near zero.</p>
+
+<h2 id="traps">7. Engineering traps we hit</h2>
+<h3>Crossing your own quotes</h3>
+<p>When fair value rises, both quotes move up. If the bid moves first, it can briefly sit at or above the market maker's own old ask. The exchange's self-trade prevention cancels it. In Prayog's first live run this happened 798 times in a few minutes and left the book one-sided. The fix: move the side that steps <em>away</em> from the market first (asks up before bids up; bids down before asks down), and skip a quote that would still reach your own opposite order until the next step.</p>
+<h3>Trusting your own bookkeeping</h3>
+<p>The exchange sends the REST answer ("order 5621 resting") and the private-feed fill for that order at the same moment; the network decides which arrives first. A bot that ignores fills for order ids it hasn't recorded yet will think it still has an order that has already filled. The fix: <strong>reconcile</strong> every couple of seconds against the exchange's list of your open orders, and treat that list as the truth.</p>
+
+<h2 id="prayog">8. Prayog's market maker</h2>
+<div class="table-wrap"><table>
+  <tr><th>Setting</th><th>calm</th><th>volatile</th></tr>
+  <tr><td>Half spread</td><td>2 ticks</td><td>4 ticks</td></tr>
+  <tr><td>Levels per side</td><td>3, 2 ticks apart</td><td>3, 3 ticks apart</td></tr>
+  <tr><td>Size per level</td><td>4 lots of 10 shares</td><td>3 lots</td></tr>
+  <tr><td>Skew</td><td>0.5 tick per lot</td><td>1 tick per lot</td></tr>
+  <tr><td>Inventory cap</td><td>60 lots</td><td>40 lots</td></tr>
+</table></div>
+<p>It quotes around a hidden fair value (a mean-reverting random walk with jumps), so it behaves as if informed about the long-run price; noise and momentum traders trade against it. Code: <code>services/agents/src/prayog_agents/agents.py</code> (<code>MarketMaker</code>) and <code>quoting.py</code> (the pure quoting rules, unit-tested).</p>
+
+<h2 id="faq">9. Questions</h2>
+<h3>Isn't a market maker just front-running?</h3>
+<p>No. Front-running is trading ahead of a client's order using knowledge of that order, which is illegal. A market maker posts prices publicly and anyone may trade against them; it takes the risk of being on the wrong side.</p>
+<h3>Why do market makers cancel so many orders?</h3>
+<p>Every time fair value moves, stale quotes become a free option for faster traders. Updating them (cancel and replace, or modify) is how a market maker avoids being picked off. In Prayog's run, modifies outnumber new orders roughly 8 to 1.</p>
+
+<footer>Prayog learning pages &middot; S13 &middot; Public sources: standard market-microstructure texts (e.g. Harris, <em>Trading and Exchanges</em>); exchange market-maker programme rules. Related: <a href="market-data-feeds.html">market-data feeds</a>, <a href="ring-buffer.html">ring buffer</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const ids = [["hs", "hsV"], ["sk", "skV"], ["inf", "inV", "%"], ["vol", "voV"]];
+  function seeded(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+  function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
+  function run() {
+    ids.forEach(([i, v, suf]) => $(v).textContent = $(i).value + (suf || ""));
+    const hs = +$("hs").value, sk = +$("sk").value, inf = +$("inf").value / 100, vol = +$("vol").value;
+    const r = seeded(12345);
+    const N = 2000, tick = 5, lot = 10;
+    let fair = 150000, inv = 0, cash = 0, trades = 0, maxInv = 0;
+    const F = [], B = [], A = [], I = [];
+    const path = [fair];
+    for (let t = 1; t <= N + 30; t++) path.push(path[t - 1] + gauss(r) * vol * 2 + 0.002 * (150000 - path[t - 1]));
+    for (let t = 0; t < N; t++) {
+      fair = path[t];
+      const center = fair - sk * (inv / lot) * tick;
+      const bid = Math.floor((center - hs * tick) / tick) * tick, ask = Math.ceil((center + hs * tick) / tick) * tick;
+      if (r() < 0.4) {
+        let buy = null;
+        if (r() < inf) {
+          // Informed: knows where fair value will be 30 steps from now and trades only when that beats our quote.
+          const future = path[t + 30];
+          buy = future > ask ? true : future < bid ? false : null;
+        } else buy = r() < 0.5;
+        if (buy !== null) {
+          if (buy) { inv -= lot; cash += ask * lot; } else { inv += lot; cash -= bid * lot; }
+          trades++;
+        }
+      }
+      maxInv = Math.max(maxInv, Math.abs(inv));
+      F.push(fair); B.push(bid); A.push(ask); I.push(inv);
+    }
+    const pnl = (cash + inv * fair) / 100;
+    draw(F, B, A, I);
+    $("stats").innerHTML = `<div>profit (₹)<b class="${pnl >= 0 ? "good" : "bad"}">${pnl.toFixed(0)}</b></div>
+      <div>trades<b>${trades}</b></div><div>end inventory<b>${inv}</b></div><div>max |inventory|<b>${maxInv}</b></div>
+      <div>per trade (₹)<b>${(pnl / Math.max(1, trades)).toFixed(2)}</b></div>`;
+  }
+  function draw(F, B, A, I) {
+    const c = $("cv"), ctx = c.getContext("2d");
+    const w = c.width, h = c.height, top = h * 0.68;
+    ctx.clearRect(0, 0, w, h);
+    const all = [...B, ...A]; const lo = Math.min(...all), hi = Math.max(...all);
+    const x = i => i / (F.length - 1) * w, y = v => top - (v - lo) / (hi - lo || 1) * (top - 8);
+    const css = getComputedStyle(document.documentElement);
+    const line = (arr, color, fy) => { ctx.strokeStyle = color; ctx.beginPath(); arr.forEach((v, i) => i ? ctx.lineTo(x(i), fy(v)) : ctx.moveTo(x(i), fy(v))); ctx.stroke(); };
+    ctx.lineWidth = 1;
+    line(B, css.getPropertyValue("--ok").trim(), y);
+    line(A, css.getPropertyValue("--hot").trim(), y);
+    ctx.lineWidth = 1.5;
+    line(F, css.getPropertyValue("--fg").trim(), y);
+    const imax = Math.max(1, ...I.map(Math.abs)), mid = top + (h - top) / 2;
+    const yi = v => mid - v / imax * ((h - top) / 2 - 4);
+    ctx.strokeStyle = css.getPropertyValue("--line").trim(); ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
+    line(I, css.getPropertyValue("--accent").trim(), yi);
+    ctx.fillStyle = css.getPropertyValue("--muted").trim(); ctx.font = "12px sans-serif";
+    ctx.fillText("fair value (white), bid (green), ask (red)", 8, 14); ctx.fillText("inventory", 8, top + 14);
+  }
+  ids.forEach(([i]) => $(i).addEventListener("input", run));
+  $("run").onclick = run;
+  run();
+})();
+</script>
+</body>
+</html>

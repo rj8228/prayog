@@ -2,7 +2,14 @@
 
 A simulated stock exchange and bot arena: simulated traders create the market; people trade by hand or with bots.
 
-Status: early development. See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md).
+Status: a live market runs locally: an exchange with a journal and deterministic replay, simulated traders (a market
+maker, noise and momentum traders), a web market page where you can watch and trade, and a Python SDK for bots.
+Post-trade P&L, the leaderboard and the ops page are next. See [docs/PROGRESS.md](docs/PROGRESS.md).
+
+- **Visit and trade:** [docs/guides/using-the-market.md](docs/guides/using-the-market.md)
+- **Build a trading bot:** [docs/bots/](docs/bots/README.md)
+- **Run, check and debug:** [docs/runbook/](docs/runbook/README.md)
+- **Learn how it works:** [docs/learnings/](docs/learnings/README.md)
 
 ## Prerequisites
 
@@ -19,15 +26,16 @@ make test   # build and test everything
 
 ```sh
 make env    # once: creates .env with random local secrets (git-ignored)
-make up     # starts PostgreSQL, Kafka, Redis, Keycloak and Traefik; returns when all are healthy
-make smoke  # checks the running stack end to end
+make up     # builds and starts everything (exchange, traders, web, PostgreSQL, Kafka, Redis, Keycloak, Traefik)
+make smoke  # 28 quick checks
+make e2e    # checks the live market is correct: feeds, liquidity, a bot round trip, journal replay
 make down   # stops it (data is kept); `make reset` also deletes the data volumes
 ```
 
 | Address | What |
 |---|---|
-| http://app.prayog.localhost | Web terminal (placeholder until S18) |
-| http://api.prayog.localhost | Gateway (placeholder until S10) |
+| http://app.prayog.localhost | The live market: watch without signing in; sign in as `trader1` to trade |
+| http://api.prayog.localhost | The exchange API for bots ([reference](docs/bots/api.md)) |
 | http://auth.prayog.localhost | Keycloak; admin console at `/admin` (credentials in `.env`) |
 | http://traefik.prayog.localhost/dashboard/ | Traefik routes |
 | `localhost:5432`, `localhost:9094`, `localhost:6379` | PostgreSQL, Kafka, Redis for tools on your machine |

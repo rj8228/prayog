@@ -6,12 +6,13 @@
 make smoke
 ```
 
-Expect 20 `ok` lines and `All checks passed.` Exit code 0 means healthy. When a check fails, its line says `FAIL` and
+Expect 28 `ok` lines and `All checks passed.` Exit code 0 means healthy. When a check fails, its line says `FAIL` and
 the script exits 1 (through `make`, which reports it as `Error 1` and exits 2). CI runs the same script on every push ("Local stack smoke test").
 
 | Group | What it proves |
 |---|---|
-| Edge | `app.`, `api.`, `traefik.` answer through Traefik; an unknown host gets 404 |
+| Edge | The web app at `app.` (and its `/callback` route), `traefik.` answer through Traefik; an unknown host gets 404 |
+| Exchange | Readiness UP; 4 instruments; `app.../api` reaches it too; 401 without a token; a bot order rests, is listed and cancels (or is rejected `SESSION_NOT_OPEN` when closed) |
 | Identity | Realm `prayog` serves the right issuer; both bot clients get tokens with `aud: prayog-api` and role `bot`; a wrong secret gets 401; `trader1`/`ops1` have their roles; the web client uses PKCE |
 | Data and messaging | PostgreSQL answers, the `keycloak` database exists, Redis answers PING, the Kafka topic has 3 partitions, the host listener `localhost:9094` works, auto topic creation is off |
 

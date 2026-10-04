@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /** Market operations, role {@code ops} only. Every action goes through the ring and the journal like any order. */
 @RestController
@@ -46,6 +47,7 @@ public class OpsController {
         }
         log.info("ops {} sets session {}", auth.getToken().getSubject(), body.state());
         return Mono.fromFuture(exchange.submit(new SetSessionState(body.state())))
+                .publishOn(Schedulers.parallel())
                 .map(r -> Map.of("inputSeq", r.inputSeq(), "events", r.events().size()));
     }
 
@@ -58,6 +60,7 @@ public class OpsController {
         }
         log.info("ops {} sets account {} enabled={}", auth.getToken().getSubject(), accountId, body.enabled());
         return Mono.fromFuture(exchange.submit(new SetAccountEnabled(accountId, body.enabled())))
+                .publishOn(Schedulers.parallel())
                 .map(r -> Map.of(
                         "inputSeq",
                         r.inputSeq(),
