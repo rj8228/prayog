@@ -29,7 +29,8 @@ AUTH=http://auth.prayog.localhost
 REALM=$AUTH/realms/prayog
 
 echo "Edge (Traefik)"
-check "app.prayog.localhost answers (placeholder)" body_has http://app.prayog.localhost "Host: app.prayog.localhost"
+check "app.prayog.localhost serves the web app" body_has http://app.prayog.localhost "<title>Prayog"
+check "web app routes like /callback fall back to the app" test "$(http_code http://app.prayog.localhost/callback)" = 200
 check "traefik.prayog.localhost dashboard answers" test "$(http_code http://traefik.prayog.localhost/dashboard/)" = 200
 check "unknown host gets 404 from Traefik" test "$(http_code http://nope.prayog.localhost/)" = 404
 
