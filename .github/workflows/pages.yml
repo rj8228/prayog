@@ -1,0 +1,49 @@
+# Publishes the interactive explainer pages in docs/overview to GitHub Pages.
+# The source pages link to repo files such as ../learnings/README.md; those would 404 on Pages,
+# so the build rewrites them (in the copies only) to github.com blob URLs.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp docs/overview/*.html docs/overview/explainer.css _site/
+          # Any href/src that climbs out of docs/overview ("../x/y") points at a repo file: send it to github.com.
+          sed -i -E 's#(href|src)="\.\./([^"]*)"#\1="https://github.com/rj8228/prayog/blob/main/docs/\2"#g' _site/*.html
+          if grep -l '\(href\|src\)="\.\./' _site/*.html; then echo "unrewritten ../ links remain"; exit 1; fi
+          ls -l _site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
