@@ -14,7 +14,9 @@ import dev.prayog.exchange.core.MatchingEngine;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -135,17 +137,30 @@ public final class ExchangePipeline implements AutoCloseable {
                     ProducerType.MULTI, // gateway threads, the clock and ops all publish
                     config.waitStrategy().create());
             disruptor.setDefaultExceptionHandler(new FatalExceptionHandler());
+            int consumers = 1 + stages.stream().mapToInt(stage -> stage.length).sum();
+            CountDownLatch running = new CountDownLatch(consumers);
             EventHandlerGroup<CommandSlot> group =
-                    disruptor.handleEventsWith(new MatchingHandler(engineFactory, lastInputSeq));
+                    disruptor.handleEventsWith(new MatchingHandler(engineFactory, lastInputSeq, running));
             for (PipelineHandler[] stage : stages) {
                 EventHandler<CommandSlot>[] adapted = new EventHandler[stage.length];
                 for (int i = 0; i < stage.length; i++) {
-                    PipelineHandler handler = stage[i];
-                    adapted[i] = (slot, sequence, endOfBatch) -> handler.onSlot(slot, endOfBatch);
+                    adapted[i] = new StageHandler(stage[i], running);
                 }
                 group = group.then(adapted);
             }
-            return new ExchangePipeline(disruptor);
+            ExchangePipeline pipeline = new ExchangePipeline(disruptor);
+            // Disruptor's shutdown only waits for consumers that are already running; one whose thread has not started
+            // yet counts as stopped and would be halted with work still in the ring. So start() returns only once every
+            // consumer thread is running, and close() can always drain everything published.
+            try {
+                if (!running.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("pipeline threads did not start within 10 s");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted while starting the pipeline", e);
+            }
+            return pipeline;
         }
     }
 
@@ -159,10 +174,18 @@ public final class ExchangePipeline implements AutoCloseable {
         private CommandSlot current;
         private long inputSeq;
 
-        MatchingHandler(Function<EventSink, MatchingEngine> engineFactory, long lastInputSeq) {
+        private final CountDownLatch running;
+
+        MatchingHandler(Function<EventSink, MatchingEngine> engineFactory, long lastInputSeq, CountDownLatch running) {
+            this.running = running;
             EventSink intoCurrentSlot = (ExchangeEvent event) -> current.events.add(event);
             this.engine = engineFactory.apply(intoCurrentSlot);
             this.inputSeq = lastInputSeq;
+        }
+
+        @Override
+        public void onStart() {
+            running.countDown();
         }
 
         @Override
@@ -171,6 +194,28 @@ public final class ExchangePipeline implements AutoCloseable {
             slot.inputSeq = ++inputSeq;
             current = slot;
             engine.apply(slot.command);
+        }
+    }
+
+    /** Adapts a {@link PipelineHandler} to the Disruptor and reports when its thread is running. */
+    private static final class StageHandler implements EventHandler<CommandSlot> {
+
+        private final PipelineHandler handler;
+        private final CountDownLatch running;
+
+        StageHandler(PipelineHandler handler, CountDownLatch running) {
+            this.handler = handler;
+            this.running = running;
+        }
+
+        @Override
+        public void onStart() {
+            running.countDown();
+        }
+
+        @Override
+        public void onEvent(CommandSlot slot, long sequence, boolean endOfBatch) throws Exception {
+            handler.onSlot(slot, endOfBatch);
         }
     }
 
