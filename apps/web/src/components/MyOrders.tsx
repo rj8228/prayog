@@ -4,6 +4,8 @@ import type { Fill, Me, OpenOrder } from '../api/types'
 import { withToken } from '../auth/auth'
 import { useAuth } from '../auth/useAuth'
 import { startPrivateFeed } from '../market/feed'
+import { orderLatencyMs } from '../market/latency'
+import { JourneyDialog } from './JourneyDialog'
 import { rupees, simClock } from '../market/format'
 
 /** The signed-in account: open orders (cancel buttons) and fills, live from the private feed. */
@@ -12,6 +14,7 @@ export function MyOrders({ refresh }: { refresh: number }) {
   const [orders, setOrders] = useState<OpenOrder[]>([])
   const [fills, setFills] = useState<Fill[]>([])
   const [me, setMe] = useState<Me | null>(null)
+  const [journey, setJourney] = useState<number | null>(null)
 
   // Bumped by the private feed and by cancels: refetch open orders.
   const [version, setVersion] = useState(0)
@@ -78,7 +81,15 @@ export function MyOrders({ refresh }: { refresh: number }) {
           <tbody>
             {orders.map((o) => (
               <tr key={o.orderId}>
-                <td className="muted">{o.orderId}</td>
+                <td>
+                  <button
+                    className="link"
+                    title="Show this order's journey"
+                    onClick={() => setJourney(o.orderId)}
+                  >
+                    {o.orderId}
+                  </button>
+                </td>
                 <td>{o.symbol}</td>
                 <td className={o.side === 'BUY' ? 'up' : 'down'}>{o.side}</td>
                 <td className="px">{rupees(o.price)}</td>
@@ -109,7 +120,11 @@ export function MyOrders({ refresh }: { refresh: number }) {
         <table>
           <tbody>
             {fills.map((f) => (
-              <tr key={`${f.tradeId}-${f.orderId}`}>
+              <tr
+                key={`${f.tradeId}-${f.orderId}`}
+                className="clickable"
+                onClick={() => setJourney(f.orderId)}
+              >
                 <td className="muted">{simClock(f.simTime)}</td>
                 <td>{f.symbol}</td>
                 <td className={f.side === 'BUY' ? 'up' : 'down'}>{f.side}</td>
@@ -119,6 +134,13 @@ export function MyOrders({ refresh }: { refresh: number }) {
             ))}
           </tbody>
         </table>
+      )}
+      {journey !== null && (
+        <JourneyDialog
+          orderId={journey}
+          latencyMs={orderLatencyMs.get(journey)}
+          onClose={() => setJourney(null)}
+        />
       )}
     </section>
   )

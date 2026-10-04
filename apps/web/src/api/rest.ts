@@ -1,12 +1,19 @@
 // REST calls. The web app talks to /api on its own host (Traefik forwards it to the exchange), so the browser
 // needs no cross-origin setup.
 import type {
+  AccountView,
+  Check,
   Instrument,
+  Journey,
   Me,
   OpenOrder,
   OrderResult,
+  Overview,
+  ReplayWindow,
   SessionInfo,
+  SessionState,
   Side,
+  Simulation,
   TradeMessage,
 } from './types'
 
@@ -68,6 +75,57 @@ export const api = {
     call<{ requested: number; cancelled: number }>(
       '/orders',
       { method: 'DELETE' },
+      token,
+    ),
+  journey: (token: string, orderId: number) =>
+    call<Journey>(`/orders/${orderId}/journey`, {}, token),
+}
+
+const put = (body: unknown): RequestInit => ({
+  method: 'PUT',
+  body: JSON.stringify(body),
+})
+const post = (body?: unknown): RequestInit => ({
+  method: 'POST',
+  body: body === undefined ? undefined : JSON.stringify(body),
+})
+
+/** Admin console calls (role admin; market and clock controls are the ops endpoints). */
+export const adminApi = {
+  overview: (token: string) => call<Overview>('/admin/overview', {}, token),
+  accounts: (token: string) =>
+    call<AccountView[]>('/admin/accounts', {}, token),
+  cancelAll: (token: string, accountId: number) =>
+    call<{ open: number; cancelled: number }>(
+      `/admin/accounts/${accountId}/cancel-all`,
+      post(),
+      token,
+    ),
+  setEnabled: (token: string, accountId: number, enabled: boolean) =>
+    call<{ cancelledOrders: number }>(
+      `/ops/accounts/${accountId}`,
+      post({ enabled }),
+      token,
+    ),
+  selfTest: (token: string) => call<Check[]>('/admin/selftest', post(), token),
+  simulation: (
+    token: string,
+    change: {
+      scenario?: string
+      paused?: boolean
+      jump?: { symbol: string | null; percent: number }
+    },
+  ) => call<Simulation>('/admin/simulation', put(change), token),
+  session: (token: string, state: SessionState) =>
+    call<unknown>('/ops/session', post({ state }), token),
+  clock: (token: string, multiplier: number) =>
+    call<unknown>('/ops/clock', put({ multiplier }), token),
+  nextOpen: (token: string) =>
+    call<unknown>('/ops/clock/next-open', post(), token),
+  replay: (token: string, symbol: string, minutes: number) =>
+    call<ReplayWindow>(
+      `/admin/replay?symbol=${symbol}&minutes=${minutes}`,
+      {},
       token,
     ),
 }

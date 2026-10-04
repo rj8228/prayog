@@ -4,6 +4,7 @@ import type { Side } from '../api/types'
 import { signIn, withToken } from '../auth/auth'
 import { useAuth } from '../auth/useAuth'
 import { rupees, toPaise } from '../market/format'
+import { orderLatencyMs } from '../market/latency'
 
 export function OrderTicket({
   symbol,
@@ -53,6 +54,7 @@ export function OrderTicket({
     if (type === 'LIMIT' && paise === null)
       return setResult({ ok: false, text: 'Price like 1495.50' })
     setBusy(true)
+    const started = performance.now()
     try {
       const r = await withToken((t) =>
         api.place(t, {
@@ -63,6 +65,8 @@ export function OrderTicket({
           price: paise ?? undefined,
         }),
       )
+      const latency = Math.round(performance.now() - started)
+      if (r.orderId) orderLatencyMs.set(r.orderId, latency)
       const prices = r.fills.map((f) => rupees(f.price)).join(', ')
       // e.g. "filled 10 @ 1,509.10", "resting, 15 open", "cancelled (NO_LIQUIDITY), filled 3 @ 1,500.00"
       let head =
@@ -74,7 +78,10 @@ export function OrderTicket({
       if (r.status !== 'filled' && r.filledQuantity)
         parts.push(`filled ${r.filledQuantity} @ ${prices}`)
       if (r.leavesQuantity) parts.push(`${r.leavesQuantity} open`)
-      setResult({ ok: r.status !== 'rejected', text: parts.join(', ') })
+      setResult({
+        ok: r.status !== 'rejected',
+        text: `${parts.join(', ')} · ${latency} ms`,
+      })
       onPlaced()
     } catch (e) {
       setResult({

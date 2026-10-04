@@ -137,3 +137,82 @@ export interface OrderUpdate {
   symbol: string
   reason: string | null
 }
+
+export interface JourneyStep {
+  eventSeq: number
+  simTime: number
+  event: string
+  detail: Record<string, string | number>
+}
+
+export interface Journey {
+  orderId: number
+  accountId: number
+  steps: JourneyStep[]
+}
+
+export interface Simulation {
+  version: number
+  scenario: string | null
+  paused: boolean
+  jumps: { id: number; symbol: string | null; percent: number }[]
+}
+
+export interface Overview {
+  status: {
+    recoveredFromJournal: boolean
+    lastProcessedInputSeq: number
+    ringCapacity: number
+    ringRemaining: number
+    publishErrors: number
+    simTime: number
+    clockMultiplier: number
+    session: SessionState
+  }
+  orders: Record<string, number>
+  latencyMillis: Record<string, number>
+  journalBytes: number
+  marketDataSubscribers: number
+  accounts: number
+  simulation: Simulation
+}
+
+export interface AccountView {
+  account: {
+    accountId: number
+    username: string
+    label: string
+    clientId: string
+    roles: string[]
+    lastSeen: number
+    requests: number
+    rejected: number
+  }
+  openOrders: number
+}
+
+export interface Check {
+  name: string
+  ok: boolean
+  detail: string
+  millis: number
+}
+
+export interface ReplayWindow {
+  symbol: string
+  fromSimTime: number
+  toSimTime: number
+  bids: Level[]
+  asks: Level[]
+  frames: {
+    simTime: number
+    changes: { side: Side; price: number; quantity: number; orders: number }[]
+    trades: {
+      tradeId: number
+      price: number
+      quantity: number
+      aggressor: Side
+    }[]
+  }[]
+  truncated: boolean
+}

@@ -1,15 +1,37 @@
+import { Link, useLocation } from 'react-router'
 import { signIn, signOut } from '../auth/auth'
+import { rolesOf } from '../auth/roles'
 import { useAuth } from '../auth/useAuth'
 import { useAppSelector } from '../hooks'
 import { simClock } from '../market/format'
 
 export function Header() {
   const { session, simTime, connected } = useAppSelector((s) => s.market)
-  const { user } = useAuth()
+  const { user, token } = useAuth()
+  const isAdmin = rolesOf(token).includes('admin')
+  const { pathname } = useLocation()
   return (
     <header className="header">
       <div className="brand">
-        Prayog <span className="muted">simulated exchange</span>
+        <Link to="/">Prayog</Link>{' '}
+        <span className="muted">simulated exchange</span>
+        <nav className="tabs">
+          <Link className={pathname === '/' ? 'active' : ''} to="/">
+            Market
+          </Link>
+          {isAdmin && (
+            <Link className={pathname === '/admin' ? 'active' : ''} to="/admin">
+              Admin
+            </Link>
+          )}
+          <a
+            href="https://rj8228.github.io/prayog/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Docs
+          </a>
+        </nav>
       </div>
       <div className="status">
         <span className={`badge session-${session.toLowerCase()}`}>
