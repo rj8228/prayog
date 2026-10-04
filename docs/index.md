@@ -82,11 +82,11 @@ Click any box to read the page that explains it. Dashed parts are planned (Step 
   <!-- Exchange service -->
   <rect class="arch-group" x="8" y="186" width="504" height="460" rx="14"/>
   <a xlink:href="overview/technical.html"><title>Technical overview (interactive)</title>
-    <text class="arch-group-title" x="24" y="210">Exchange service · one JVM, one shard ↗</text></a>
+    <text class="arch-group-title" x="500" y="636" text-anchor="end">Exchange service · one JVM, one shard ↗</text></a>
 
   <path class="arch-edge" d="M133 152 V224" marker-end="url(#arch-arrow)"/>
   <path class="arch-edge arch-dashed" d="M330 152 L292 224" marker-end="url(#arch-arrow)"/>
-  <text class="arch-note" x="352" y="186" text-anchor="start">JWT keys</text>
+  <text class="arch-note" x="352" y="186" style="text-anchor: start">JWT keys</text>
   <path class="arch-edge" d="M470 66 V252 H322" marker-end="url(#arch-arrow)"/>
   <text class="arch-note" x="478" y="164" text-anchor="middle" transform="rotate(90 478 164)">direct, inside Docker</text>
 
@@ -124,7 +124,7 @@ Click any box to read the page that explains it. Dashed parts are planned (Step 
     <rect class="arch-node" x="178" y="548" width="140" height="52" rx="10"/>
     <text class="arch-title" x="248" y="570">Private feed</text>
     <text class="arch-sub" x="248" y="589">your orders, fills</text></a>
-  <text class="arch-note" x="173" y="628">to browsers and bots over WebSocket</text>
+  <text class="arch-note" x="110" y="618" style="text-anchor: start">to browsers and bots over WebSocket</text>
 
   <!-- Helpers on the right -->
   <a xlink:href="learnings/S07-sequencer-pipeline/"><title>S7: sequencer pipeline and simulated clock</title>
@@ -145,9 +145,9 @@ Click any box to read the page that explains it. Dashed parts are planned (Step 
 
   <!-- Step 2 -->
   <rect class="arch-group arch-dashed" x="8" y="676" width="504" height="106" rx="14"/>
-  <text class="arch-group-title" x="24" y="698">Step 2 · planned</text>
-  <path class="arch-edge arch-dashed" d="M98 600 V710" marker-end="url(#arch-arrow)"/>
-  <text class="arch-note" x="104" y="664" text-anchor="start">trades</text>
+  <text class="arch-group-title" x="500" y="698" text-anchor="end">Step 2 · planned</text>
+  <path class="arch-edge arch-dashed" d="M60 600 V710" marker-end="url(#arch-arrow)"/>
+  <text class="arch-note" x="66" y="664" style="text-anchor: start">trades</text>
   <a xlink:href="overview/kafka.html"><title>Kafka (interactive)</title>
     <rect class="arch-node arch-planned" x="24" y="712" width="148" height="56" rx="10"/>
     <text class="arch-title" x="98" y="736">Kafka</text>
