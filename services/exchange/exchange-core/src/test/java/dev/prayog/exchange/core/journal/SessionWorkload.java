@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A busy trading session for replay tests: several gateway-like threads and a clock thread submit at the same time,
@@ -87,6 +88,7 @@ final class SessionWorkload {
     static void run(ExchangePipeline pipeline, Acks acks, int threads, int perThread) throws InterruptedException {
         pipeline.submit(new ClockTick(START));
         CountDownLatch go = new CountDownLatch(1);
+        AtomicLong submitted = new AtomicLong();
         List<Thread> all = new ArrayList<>();
         for (int t = 0; t < threads; t++) {
             int id = t;
@@ -95,12 +97,15 @@ final class SessionWorkload {
                 await(go);
                 for (int i = 0; i < perThread; i++) {
                     pipeline.submit(command(random, acks, id, i));
+                    submitted.incrementAndGet();
                 }
             }));
         }
         // The clock: about one tick per 50 trading commands, 30 sim seconds each. It runs from 09:00 to 16:00 (open at
         // 09:15, close and expiry at 15:30), then skips the night to 09:00 the next day, so the run crosses an open, a
-        // close and the next open while the market is open most of the time.
+        // close and the next open while the market is open most of the time. Each tick waits until its share of trading
+        // commands is in: the interleaving still differs on every run, but the clock can't race through the day before
+        // anyone trades (it did on a slow CI runner: no order was resting at the close, so nothing expired).
         int ticks = threads * perThread / 50;
         all.add(new Thread(() -> {
             await(go);
@@ -112,8 +117,10 @@ final class SessionWorkload {
                     time += 17 * HOUR;
                     dayEnd += 24 * HOUR;
                 }
+                while (submitted.get() < (long) i * 50) {
+                    Thread.onSpinWait();
+                }
                 pipeline.submit(new ClockTick(time));
-                Thread.yield();
             }
         }));
         all.forEach(Thread::start);
