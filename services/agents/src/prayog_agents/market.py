@@ -20,10 +20,13 @@ class Market:
         self.slow = {s: Ema(half_life=40) for s in symbols}
         self.trades = dict.fromkeys(symbols, 0)
         self.ready = asyncio.Event()
+        self.paused = False  # set by the admin console (SimulationFollower)
 
     @property
     def is_open(self) -> bool:
-        return self.session == "OPEN"
+        """True when the agents should trade: the session is open and the admin has not paused
+        them."""
+        return self.session == "OPEN" and not self.paused
 
     async def run(self) -> None:
         async for message in market_data(self.settings, self.symbols):

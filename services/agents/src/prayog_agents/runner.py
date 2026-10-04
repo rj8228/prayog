@@ -25,6 +25,7 @@ from prayog_sdk import PrayogClient, Settings
 from prayog_sdk.money import to_rupees
 
 from prayog_agents.agents import MarketMaker, MomentumTrader, NoiseTrader
+from prayog_agents.control import SimulationFollower
 from prayog_agents.fairvalue import FairValue
 from prayog_agents.market import Market
 from prayog_agents.scenarios import SCENARIOS
@@ -116,7 +117,8 @@ async def run() -> None:
                     maker.position[s],
                 )
 
-    tasks = [market.run(), evolve(), report()]
+    follower = SimulationFollower(market, fair, agents)
+    tasks = [market.run(), evolve(), report(), follower.run(maker.client, maker)]
     for agent in agents:
         tasks += [agent.track(), agent.run()]
     await asyncio.gather(*tasks)

@@ -36,6 +36,12 @@ class FairValue:
     def value(self) -> float:
         return math.exp(self.log_value)
 
+    def jump(self, percent: float) -> float:
+        """Moves the fair value by ``percent`` at once (admin "news"), staying inside the band."""
+        moved = self.log_value + math.log1p(percent / 100)
+        self.log_value = min(self.log_high, max(self.log_low, moved))
+        return self.value
+
     def step(self) -> float:
         s = self.scenario
         drift = s.reversion * (self.log_ref - self.log_value)
