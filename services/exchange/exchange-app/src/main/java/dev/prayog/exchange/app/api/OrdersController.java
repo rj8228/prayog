@@ -1,6 +1,8 @@
 package dev.prayog.exchange.app.api;
 
 import dev.prayog.contracts.OrderType;
+import dev.prayog.exchange.app.account.AccountDirectory;
+import dev.prayog.exchange.app.admin.JournalViews;
 import dev.prayog.exchange.app.api.ApiTypes.CancelAllResult;
 import dev.prayog.exchange.app.api.ApiTypes.Me;
 import dev.prayog.exchange.app.api.ApiTypes.ModifyOrder;
@@ -55,13 +57,19 @@ public class OrdersController {
     private final RateLimiter limiter;
     private final ExchangeProperties.RateLimit limits;
     private final MeterRegistry meters;
+    private final AccountDirectory directory;
+    private final JournalViews journal;
 
     public OrdersController(
             ExchangeRuntime exchange,
             MarketHub market,
             RateLimiter limiter,
             ExchangeProperties props,
-            MeterRegistry meters) {
+            MeterRegistry meters,
+            AccountDirectory directory,
+            JournalViews journal) {
+        this.directory = directory;
+        this.journal = journal;
         this.exchange = exchange;
         this.market = market;
         this.limiter = limiter;
@@ -199,7 +207,28 @@ public class OrdersController {
         return open.symbol();
     }
 
+    /**
+     * The life of one of your orders, from the journal: accepted, each fill (as maker or taker), modifies, cancels.
+     * Admins may look at any order.
+     */
+    @GetMapping("/orders/{orderId}/journey")
+    Mono<JournalViews.Journey> journey(
+            JwtAuthenticationToken auth,
+            @RequestHeader(value = Trader.ACCOUNT_HEADER, required = false) String label,
+            @PathVariable long orderId) {
+        Trader trader = Traders.from(auth, label);
+        return Mono.fromCallable(() -> journal.journey(orderId))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(j -> {
+                    if (j.steps().isEmpty() || (j.accountId() != trader.accountId() && !trader.isAdmin())) {
+                        throw new ApiExceptions.NotFound("no order " + orderId + " for this account");
+                    }
+                    return j;
+                });
+    }
+
     private void throttle(Trader trader) {
+        directory.seen(trader);
         boolean ok = trader.isBot()
                 ? limiter.tryAcquire(trader.accountId(), limits.botOrdersPerSecond(), limits.botBurst())
                 : limiter.tryAcquire(trader.accountId(), limits.ordersPerSecond(), limits.burst());
@@ -216,10 +245,14 @@ public class OrdersController {
                 .description("request accepted by the gateway until journaled and answered")
                 .tag("kind", kind)
                 .publishPercentileHistogram()
+                .publishPercentiles(0.5, 0.99, 0.999)
                 .register(meters)
                 .record(elapsed, TimeUnit.NANOSECONDS);
         meters.counter("prayog.orders", "kind", kind, "outcome", result.status())
                 .increment();
+        if ("rejected".equals(result.status())) {
+            directory.rejected(trader);
+        }
         if (log.isDebugEnabled() || "rejected".equals(result.status())) {
             log.atLevel("rejected".equals(result.status()) ? org.slf4j.event.Level.INFO : org.slf4j.event.Level.DEBUG)
                     .addKeyValue("inputSeq", result.inputSeq())

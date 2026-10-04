@@ -123,6 +123,7 @@ services:
       PRAYOG_AGENTS_SECRET: ${PRAYOG_AGENTS_SECRET:?set in .env}
       PRAYOG_TRADER1_PASSWORD: ${PRAYOG_TRADER1_PASSWORD:?set in .env}
       PRAYOG_OPS1_PASSWORD: ${PRAYOG_OPS1_PASSWORD:?set in .env}
+      PRAYOG_ADMIN1_PASSWORD: ${PRAYOG_ADMIN1_PASSWORD:?set in .env}
     volumes:
       - ./keycloak:/opt/keycloak/data/import:ro
     healthcheck:

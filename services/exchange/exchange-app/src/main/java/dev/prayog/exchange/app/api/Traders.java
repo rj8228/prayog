@@ -20,6 +20,7 @@ public final class Traders {
             }
         }
         String clientId = auth.getToken().getClaimAsString("azp");
-        return Trader.of(auth.getToken().getSubject(), label, clientId, roles);
+        String username = auth.getToken().getClaimAsString("preferred_username");
+        return Trader.of(auth.getToken().getSubject(), username, label, clientId, roles);
     }
 }

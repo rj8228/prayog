@@ -266,6 +266,136 @@ class ExchangeApiTest {
                 .isTrue();
     }
 
+    @Test
+    void adminEndpointsAreForAdminsAndTheSimulationFeedForBots() {
+        client.mutateWith(trader("alice"))
+                .get()
+                .uri("/api/v1/admin/overview")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        client.mutateWith(ops())
+                .get()
+                .uri("/api/v1/admin/overview")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        client.mutateWith(admin())
+                .get()
+                .uri("/api/v1/admin/overview")
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.mutateWith(admin())
+                .get()
+                .uri("/api/v1/ops/status")
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.mutateWith(bot("agents"))
+                .get()
+                .uri("/api/v1/simulation")
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.mutateWith(trader("alice"))
+                .get()
+                .uri("/api/v1/simulation")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        // An admin also trades like anyone else.
+        JsonNode placed = place(
+                admin(),
+                null,
+                Map.of("symbol", "INFY", "side", "BUY", "type", "LIMIT", "price", 140_000, "quantity", 1));
+        assertThat(placed.get("status").asString()).isEqualTo("resting");
+    }
+
+    @Test
+    void theSelfTestPassesOnAHealthyExchange() {
+        JsonNode checks = client.mutateWith(admin())
+                .post()
+                .uri("/api/v1/admin/selftest")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        java.util.Map<String, Boolean> results = new java.util.LinkedHashMap<>();
+        checks.forEach(c -> results.put(c.get("name").asString(), c.get("ok").asBoolean()));
+        assertThat(results).hasSize(6);
+        // No simulated traders run in this test, so "traders are trading" may fail; everything else must pass.
+        results.forEach((name, ok) -> {
+            if (!name.startsWith("Simulated traders")) {
+                assertThat(ok).as(name + ": " + checks).isTrue();
+            }
+        });
+    }
+
+    @Test
+    void theAdminSteersTheSimulation() {
+        JsonNode state = client.mutateWith(admin())
+                .put()
+                .uri("/api/v1/admin/simulation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "scenario", "volatile", "paused", true, "jump", Map.of("symbol", "TCS", "percent", -2.5)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(state.get("scenario").asString()).isEqualTo("volatile");
+        assertThat(state.get("paused").asBoolean()).isTrue();
+        assertThat(state.get("jumps").get(0).get("percent").asDouble()).isEqualTo(-2.5);
+        JsonNode seenByBots = get(bot("agents"), "/api/v1/simulation");
+        assertThat(seenByBots.get("version").asLong())
+                .isEqualTo(state.get("version").asLong());
+        client.mutateWith(admin())
+                .put()
+                .uri("/api/v1/admin/simulation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("scenario", "wild"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    void accountsJourneysAndReplayAreVisibleToTheRightPeople() {
+        long orderId = place(
+                        trader("alice"),
+                        null,
+                        Map.of("symbol", "INFY", "side", "SELL", "type", "LIMIT", "price", 150_000, "quantity", 5))
+                .get("orderId")
+                .asLong();
+        place(trader("bob"), null, Map.of("symbol", "INFY", "side", "BUY", "type", "MARKET", "quantity", 2));
+
+        JsonNode journey = get(trader("alice"), "/api/v1/orders/" + orderId + "/journey");
+        assertThat(journey.get("steps").get(0).get("event").asString()).isEqualTo("accepted");
+        assertThat(journey.get("steps").get(1).get("event").asString()).isEqualTo("trade");
+        assertThat(journey.get("steps").get(1).get("detail").get("role").asString())
+                .isEqualTo("maker");
+        client.mutateWith(trader("bob"))
+                .get()
+                .uri("/api/v1/orders/" + orderId + "/journey")
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        assertThat(get(admin(), "/api/v1/orders/" + orderId + "/journey").get("steps"))
+                .hasSize(2);
+
+        JsonNode accounts = get(admin(), "/api/v1/admin/accounts");
+        assertThat(accounts.findValuesAsString("username")).contains("alice", "bob");
+
+        JsonNode window = get(admin(), "/api/v1/admin/replay?symbol=INFY&minutes=60");
+        assertThat(window.get("symbol").asString()).isEqualTo("INFY");
+        assertThat(window.get("frames").size() + window.get("asks").size()).isPositive();
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------------------------
 
     private static ConfigurableApplicationContext startApp(Path journal) {
@@ -326,14 +456,28 @@ class ExchangeApiTest {
         return token(subject, "prayog-bot-demo", "bot");
     }
 
+    private static JwtMutator admin() {
+        return mockJwt()
+                .jwt(j -> j.subject("admin-person")
+                        .claim("preferred_username", "admin1")
+                        .claim("azp", "prayog-web")
+                        .claim("realm_access", Map.of("roles", List.of("trader", "ops", "admin"))))
+                .authorities(
+                        new SimpleGrantedAuthority("ROLE_trader"),
+                        new SimpleGrantedAuthority("ROLE_ops"),
+                        new SimpleGrantedAuthority("ROLE_admin"));
+    }
+
     private static JwtMutator ops() {
         return token("ops-person", "prayog-web", "ops");
     }
 
     private static JwtMutator token(String subject, String clientId, String role) {
         return mockJwt()
-                .jwt(j ->
-                        j.subject(subject).claim("azp", clientId).claim("realm_access", Map.of("roles", List.of(role))))
+                .jwt(j -> j.subject(subject)
+                        .claim("preferred_username", subject)
+                        .claim("azp", clientId)
+                        .claim("realm_access", Map.of("roles", List.of(role))))
                 .authorities(new SimpleGrantedAuthority("ROLE_" + role));
     }
 

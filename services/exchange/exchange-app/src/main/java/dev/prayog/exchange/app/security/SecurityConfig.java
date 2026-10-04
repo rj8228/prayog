@@ -32,7 +32,9 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
  * <ul>
  *   <li>Public: health, metrics, instruments, market data (REST and WebSocket).
  *   <li>{@code trader} or {@code bot}: orders, own account, private feed.
- *   <li>{@code ops}: session, clock, kill switch, status.
+ *   <li>{@code ops} (or {@code admin}): session, clock, kill switch, status.
+ *   <li>{@code admin}: the admin console API (self-test, accounts, simulation control, journal replay).
+ *   <li>{@code bot} or {@code admin}: read the simulation controls.
  * </ul>
  */
 @Configuration
@@ -53,7 +55,11 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/ws/market")
                         .permitAll()
                         .pathMatchers("/api/v1/ops/**")
-                        .hasRole("ops")
+                        .hasAnyRole("ops", "admin")
+                        .pathMatchers("/api/v1/admin/**")
+                        .hasRole("admin")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/simulation")
+                        .hasAnyRole("bot", "admin")
                         .pathMatchers("/api/v1/**")
                         .hasAnyRole("trader", "bot")
                         .anyExchange()

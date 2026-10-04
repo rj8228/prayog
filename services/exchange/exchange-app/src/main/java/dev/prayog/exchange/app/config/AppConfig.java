@@ -1,6 +1,10 @@
 package dev.prayog.exchange.app.config;
 
+import dev.prayog.exchange.app.account.AccountDirectory;
 import dev.prayog.exchange.app.account.AccountHub;
+import dev.prayog.exchange.app.admin.JournalViews;
+import dev.prayog.exchange.app.admin.SelfTest;
+import dev.prayog.exchange.app.admin.SimulationControl;
 import dev.prayog.exchange.app.core.ExchangeRuntime;
 import dev.prayog.exchange.app.market.MarketHub;
 import dev.prayog.exchange.app.security.RateLimiter;
@@ -40,6 +44,26 @@ public class AppConfig {
         Gauge.builder("prayog.private.subscribers", accounts, AccountHub::subscriberCount)
                 .register(meters);
         return runtime;
+    }
+
+    @Bean
+    AccountDirectory accountDirectory() {
+        return new AccountDirectory();
+    }
+
+    @Bean
+    SimulationControl simulationControl() {
+        return new SimulationControl();
+    }
+
+    @Bean
+    JournalViews journalViews(ExchangeProperties props) {
+        return new JournalViews(props.journalDir());
+    }
+
+    @Bean
+    SelfTest selfTest(ExchangeRuntime exchange, MarketHub market, ExchangeProperties props) {
+        return new SelfTest(exchange, market, props.journalDir());
     }
 
     @Bean

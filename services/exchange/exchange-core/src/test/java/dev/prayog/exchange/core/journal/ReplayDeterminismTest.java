@@ -74,6 +74,32 @@ class ReplayDeterminismTest {
     }
 
     @Test
+    void theOnlineCheckComparesWhatBothLogsHaveReached() throws Exception {
+        record(dir, SessionWorkload.SETUP, SessionWorkload.SETUP, 2, 2_000);
+        // Simulate a live exchange whose event log is behind: drop the last part of the event log.
+        java.nio.file.Path events = Segments.list(dir, JournalHandler.EVENTS).getLast();
+        try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(events.toFile(), "rw")) {
+            file.setLength(file.length() * 3 / 4);
+        }
+
+        Replay.OnlineReport report = Replay.checkOnline(dir);
+
+        assertThat(report.matches()).isTrue();
+        assertThat(report.comparedUpTo()).isPositive();
+        assertThat(report.recorded().records()).isEqualTo(report.comparedUpTo());
+    }
+
+    @Test
+    void theOnlineCheckCatchesADifference() throws Exception {
+        List<Instrument> wider = SessionWorkload.INSTRUMENTS.stream()
+                .map(i -> new Instrument(i.symbol(), i.tickSize(), i.maxOrderQuantity(), i.referencePrice(), 20))
+                .toList();
+        record(dir, SessionWorkload.SETUP, new EngineSetup(wider, SessionWorkload.SCHEDULE), 2, 2_000);
+
+        assertThat(Replay.checkOnline(dir).matches()).isFalse();
+    }
+
+    @Test
     void aGapInTheInputJournalStopsTheReplay() throws IOException {
         JournalCodec codec = new JournalCodec();
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[4096]);

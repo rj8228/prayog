@@ -11,7 +11,8 @@
     "realm": [
       { "name": "trader", "description": "Places and manages own orders" },
       { "name": "ops", "description": "Market operations: sessions, halts, kill switch" },
-      { "name": "bot", "description": "Automated trading client (client credentials)" }
+      { "name": "bot", "description": "Automated trading client (client credentials)" },
+      { "name": "admin", "description": "Admin console: self-test, simulation control, accounts, journal replay" }
     ]
   },
   "clients": [
@@ -130,6 +131,16 @@
       "lastName": "One",
       "credentials": [{ "type": "password", "value": "${PRAYOG_OPS1_PASSWORD}", "temporary": false }],
       "realmRoles": ["default-roles-prayog", "ops"]
+    },
+    {
+      "username": "admin1",
+      "enabled": true,
+      "email": "admin1@prayog.localhost",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "One",
+      "credentials": [{ "type": "password", "value": "${PRAYOG_ADMIN1_PASSWORD}", "temporary": false }],
+      "realmRoles": ["default-roles-prayog", "trader", "ops", "admin"]
     },
     {
       "username": "service-account-prayog-bot-demo",

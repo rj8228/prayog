@@ -61,6 +61,38 @@ public final class Replay {
         return new Report(commands, recorded, replayed, firstDifference);
     }
 
+    /** Outcome of {@link #checkOnline}: both fingerprints cover events 1 to {@code comparedUpTo}. */
+    public record OnlineReport(long commands, long comparedUpTo, Digest recorded, Digest replayed) {
+        public boolean matches() {
+            return recorded.equals(replayed);
+        }
+    }
+
+    /**
+     * Checks a journal that is still being written, without stopping the exchange. Replays every command readable now,
+     * then compares replayed and recorded events up to the last event seq both have (the event log may be slightly
+     * ahead of, or behind, what the readable commands produce). A half-written last record is simply not read yet.
+     */
+    public static OnlineReport checkOnline(Path dir) throws IOException {
+        java.util.List<byte[]> replayed = new java.util.ArrayList<>();
+        long commands = replay(
+                dir, (seq, buffer, offset, length) -> replayed.add(Fingerprint.bytes(seq, buffer, offset, length)));
+        long replayedUpTo = replayed.size(); // event seqs are 1, 2, 3, ... with no gaps
+        Fingerprint recorded = new Fingerprint();
+        long[] recordedUpTo = {0};
+        JournalReader.read(dir, JournalHandler.EVENTS, (seq, buffer, offset, length) -> {
+            if (seq <= replayedUpTo) {
+                recorded.add(seq, buffer, offset, length);
+                recordedUpTo[0] = seq;
+            }
+        });
+        Fingerprint replayedPrefix = new Fingerprint();
+        for (int i = 0; i < recordedUpTo[0]; i++) {
+            replayedPrefix.addBytes(replayed.get(i));
+        }
+        return new OnlineReport(commands, recordedUpTo[0], recorded.digest(), replayedPrefix.digest());
+    }
+
     /**
      * Replays the input journal, handing each event record (as it would be written to the event log) to
      * {@code events}. Returns the number of commands replayed.
@@ -144,6 +176,11 @@ public final class Replay {
 
         void add(long seq, DirectBuffer buffer, int offset, int length) {
             sha256.update(bytes(seq, buffer, offset, length));
+            records++;
+        }
+
+        void addBytes(byte[] bytes) {
+            sha256.update(bytes);
             records++;
         }
 

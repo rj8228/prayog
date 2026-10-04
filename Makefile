@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help env up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
+.PHONY: help env env-upgrade users up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
@@ -24,7 +24,24 @@ env: ## Create .env from .env.example with random local secrets (keeps an existi
 
 up: ## Build changed images, start the stack, wait until healthy (PROFILES="infra app" by default)
 	@test -f .env || { echo "No .env: run 'make env' first."; exit 1; }
+	@$(MAKE) -s env-upgrade
 	$(COMPOSE) $(PROFILE_FLAGS) up -d --build --remove-orphans --wait --wait-timeout 600
+	@./deploy/compose/users.sh
+
+env-upgrade: ## Add variables that are in .env.example but missing from .env (random secrets; existing values kept)
+	@while IFS= read -r line; do \
+		case "$$line" in \
+			''|\#*) ;; \
+			*=*) key="$${line%%=*}"; \
+				if ! grep -q "^$$key=" .env; then \
+					case "$$line" in *=change-me) value="$$(openssl rand -hex 16)";; *) value="$${line#*=}";; esac; \
+					echo "$$key=$$value" >> .env; echo "Added $$key to .env"; \
+				fi;; \
+		esac; \
+	done < .env.example
+
+users: ## Ensure Keycloak roles and seeded users (admin1...) exist on the running stack; keeps all data
+	./deploy/compose/users.sh
 
 down: ## Stop the stack (data volumes are kept)
 	$(COMPOSE) --profile '*' down
