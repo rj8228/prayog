@@ -30,7 +30,6 @@ REALM=$AUTH/realms/prayog
 
 echo "Edge (Traefik)"
 check "app.prayog.localhost answers (placeholder)" body_has http://app.prayog.localhost "Host: app.prayog.localhost"
-check "api.prayog.localhost answers (placeholder)" body_has http://api.prayog.localhost "Host: api.prayog.localhost"
 check "traefik.prayog.localhost dashboard answers" test "$(http_code http://traefik.prayog.localhost/dashboard/)" = 200
 check "unknown host gets 404 from Traefik" test "$(http_code http://nope.prayog.localhost/)" = 404
 
@@ -68,6 +67,27 @@ check "user trader1 exists with role trader" user_has_role trader1 trader
 check "user ops1 exists with role ops" user_has_role ops1 ops
 check "client prayog-web is public with PKCE S256" sh -c "curl -s -H 'Authorization: Bearer $admin' \
   '$AUTH/admin/realms/prayog/clients?clientId=prayog-web' | grep -q '\"pkce.code.challenge.method\":\"S256\"'"
+
+echo "Exchange"
+API=http://api.prayog.localhost/api/v1
+check "exchange is healthy (readiness UP)" body_has http://api.prayog.localhost/actuator/health/readiness '"UP"'
+check "api.prayog.localhost lists 4 instruments" sh -c "curl -s $API/instruments | python3 -c 'import json,sys; assert len(json.load(sys.stdin)) == 4'"
+check "app.prayog.localhost/api reaches the exchange too" body_has http://app.prayog.localhost/api/v1/session '"state"'
+session=$(curl -s "$API/session" | json_field state)
+check "orders without a token are refused (401)" test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/orders")" = 401
+if [ -n "$token" ]; then
+  placed=$(curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d '{"symbol":"INFY","side":"BUY","type":"LIMIT","price":140000,"quantity":1,"clientOrderId":"smoke"}' "$API/orders")
+  status=$(printf '%s' "$placed" | json_field status)
+  if [ "$session" = OPEN ]; then
+    check "bot order rests on the book (session OPEN)" test "$status" = resting
+    order_id=$(printf '%s' "$placed" | json_field orderId)
+    check "bot order is listed as open" sh -c "curl -s -H 'Authorization: Bearer $token' $API/orders | grep -q '\"orderId\":$order_id'"
+    check "bot order cancels" sh -c "curl -s -X DELETE -H 'Authorization: Bearer $token' $API/orders/$order_id | grep -q '\"status\":\"cancelled\"'"
+  else
+    check "bot order is answered (session $session: rejected SESSION_NOT_OPEN)" test "$status" = rejected
+  fi
+fi
 
 echo "Data and messaging"
 check "PostgreSQL: prayog database answers SELECT 1" \

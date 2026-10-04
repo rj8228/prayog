@@ -1,0 +1,15 @@
+# Keep image builds small and reproducible: never send build outputs, dependencies or secrets.
+**/target
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+.git
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+data

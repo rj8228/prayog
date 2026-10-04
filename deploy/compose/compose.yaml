@@ -1,8 +1,8 @@
 # Prayog local stack. Run through the Makefile (`make up`, `make down`, `make smoke`), which passes the root .env.
 #
 # Profiles (BUILD_PLAN 16.2 #28):
-#   infra  PostgreSQL, Kafka, Redis, Keycloak, Traefik (+ placeholders for app. and api. until S10/S18)
-#   app    exchange, post-trade, web (from S10)
+#   infra  PostgreSQL, Kafka, Redis, Keycloak, Traefik
+#   app    exchange, simulated traders, web
 #   obs    Prometheus, Grafana (S21)
 #
 # Every service has a health check; `depends_on: condition: service_healthy` gives the start order, and
@@ -170,8 +170,7 @@ services:
       traefik.http.routers.dashboard.entrypoints: web
       traefik.http.routers.dashboard.service: api@internal
 
-  # Placeholders so app. and api. answer before the web app (S18) and gateway (S10) exist. Each prints the request it
-  # received. Remove them when the real services take over the host names.
+  # Placeholder so app. answers before the web app exists; it prints the request it received.
   app-placeholder:
     image: traefik/whoami:v1.12.0
     profiles: [infra]
@@ -181,15 +180,59 @@ services:
       traefik.http.routers.app.entrypoints: web
     # No health check: a scratch image with no shell; `--wait` waits for it to be running.
 
-  api-placeholder:
-    image: traefik/whoami:v1.12.0
-    profiles: [infra]
+  # ---- application (profile app) ------------------------------------------------------------------------------------
+
+  # The exchange: gateway, matching engine, journal and market data in one JVM (ADR 0009).
+  exchange:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/exchange.Dockerfile
+    image: prayog/exchange:dev
+    profiles: [app]
+    depends_on:
+      keycloak: { condition: service_healthy }
+    environment:
+      PRAYOG_JOURNAL_DIR: /data/journal
+      # Keys come straight from Keycloak inside the network; tokens still name the public issuer.
+      PRAYOG_JWK_SET_URI: http://keycloak:8080/realms/prayog/protocol/openid-connect/certs
+      PRAYOG_JWT_ISSUER: http://auth.prayog.localhost/realms/prayog
+      SIM_CLOCK_MULTIPLIER: ${SIM_CLOCK_MULTIPLIER:-1}
+      SIM_DAY_OPEN: ${SIM_DAY_OPEN:-09:15}
+      SIM_DAY_CLOSE: ${SIM_DAY_CLOSE:-15:30}
+      # One JSON object per log line (Elastic Common Schema): easy to filter with jq or ship to a log store.
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    volumes:
+      - exchange-journal:/data/journal
+    mem_limit: 768m
+    healthcheck:
+      # bash, not sh: the image's sh is dash, which has no /dev/tcp.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /actuator/health/readiness HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
     labels:
       traefik.enable: "true"
+      # Bots and tools: api.prayog.localhost
       traefik.http.routers.api.rule: Host(`api.prayog.localhost`)
       traefik.http.routers.api.entrypoints: web
+      traefik.http.routers.api.service: exchange
+      # The web app calls /api on its own host, so the browser needs no cross-origin setup.
+      traefik.http.routers.app-api.rule: Host(`app.prayog.localhost`) && PathPrefix(`/api`)
+      traefik.http.routers.app-api.entrypoints: web
+      traefik.http.routers.app-api.priority: "100"
+      traefik.http.routers.app-api.service: exchange
+      traefik.http.services.exchange.loadbalancer.server.port: "8080"
 
 volumes:
+  exchange-journal:
   postgres-data:
   redis-data:
   kafka-data:

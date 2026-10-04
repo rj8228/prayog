@@ -5,7 +5,8 @@
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
 COMPOSE := docker compose --env-file .env -f deploy/compose/compose.yaml
-PROFILES ?= infra
+PROFILES ?= infra app
+PROFILE_FLAGS = $(foreach p,$(PROFILES),--profile $(p))
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -21,9 +22,9 @@ env: ## Create .env from .env.example with random local secrets (keeps an existi
 		done < .env.example > .env; \
 		echo "Created .env with random local secrets."; fi
 
-up: ## Start the stack and wait until every service is healthy (PROFILES=infra by default)
+up: ## Build changed images, start the stack, wait until healthy (PROFILES="infra app" by default)
 	@test -f .env || { echo "No .env: run 'make env' first."; exit 1; }
-	$(COMPOSE) --profile $(PROFILES) up -d --wait --wait-timeout 300
+	$(COMPOSE) $(PROFILE_FLAGS) up -d --build --remove-orphans --wait --wait-timeout 600
 
 down: ## Stop the stack (data volumes are kept)
 	$(COMPOSE) --profile '*' down
