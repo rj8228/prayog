@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GC and JIT for Low Latency</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#kitchen">2. A business example</a>
+  <a href="#alloc">3. Allocation and GC</a>
+  <a href="#collectors">4. Choosing a collector</a>
+  <a href="#nogarbage">5. Garbage-free hot paths</a>
+  <a href="#jit">6. The JIT and warm-up</a>
+  <a href="#safepoints">7. Safepoints</a>
+  <a href="#measure">8. Measuring latency honestly</a>
+  <a href="#sim">9. Try it: tails and pauses</a>
+  <a href="#prayog">10. In Prayog</a>
+  <a href="#faq">11. Questions</a>
+</nav>
+<main>
+<h1>Garbage collection and the JIT, for low latency</h1>
+<p class="lede">Java is fast once it's running hot, but two JVM mechanisms decide its worst moments: the garbage collector (pauses) and the just-in-time compiler (warm-up and deoptimisation). Trading systems care about the worst moments, so this page explains both, how to keep them off the order path, and how to measure latency without fooling yourself.</p>
+
+<h2 id="problem">1. The problem: the average lies</h2>
+<p>A matching engine that answers in 20 µs on average but stalls for 50 ms once a minute is a problem: those stalls land on real orders, often during the busiest moments, when allocation is highest. That's why trading systems quote <strong>percentiles</strong> (p99, p99.9, max) rather than averages, and why the JVM's pause behaviour matters more than its raw speed.</p>
+
+<h2 id="kitchen">2. A business example: the restaurant's cleaning crew and the new chef</h2>
+<ul>
+  <li><strong>Garbage collection</strong> is the cleaning crew. The old way: close the restaurant every so often and clean everything (a stop-the-world pause). The modern way: clean while service continues, pausing only for seconds to swap trays (a concurrent collector). Best of all: make less mess (allocate less).</li>
+  <li><strong>The JIT</strong> is a new chef. On day one they follow the recipe card slowly (the interpreter). After cooking a dish a few thousand times they do it from memory, fast, with shortcuts (compiled code). If the menu changes, the shortcuts no longer apply and they go back to the card for a while (deoptimisation).</li>
+</ul>
+
+<h2 id="alloc">3. Allocation and garbage collection</h2>
+<ul>
+  <li><strong>Allocation is cheap.</strong> Each thread gets a private chunk of the young generation (a TLAB, thread-local allocation buffer); <code>new</code> just bumps a pointer.</li>
+  <li><strong>Collection is the cost.</strong> Most objects die young (the generational hypothesis), so collectors clean the young generation often and cheaply, copying the few survivors. Pause time grows with the number of <em>surviving</em> objects, not dead ones.</li>
+  <li><strong>Escape analysis.</strong> If the JIT proves an object never leaves a method, it can skip allocating it entirely and keep its fields in registers (scalar replacement). Many short-lived iterators and small records disappear this way, but you can't rely on it without measuring.</li>
+</ul>
+
+<h2 id="collectors">4. Choosing a collector</h2>
+<div class="table-wrap"><table>
+  <tr><th>Collector</th><th>Flag</th><th>Pauses</th><th>Good for</th></tr>
+  <tr><td>G1</td><td>default since Java 9</td><td>Typically a few to tens of ms, aiming at a target (<code>-XX:MaxGCPauseMillis</code>, default 200)</td><td>General services; a good default</td></tr>
+  <tr><td>ZGC</td><td><code>-XX:+UseZGC</code> (generational mode in Java 21 with <code>-XX:+ZGenerational</code>; the default mode from Java 23)</td><td>Sub-millisecond, nearly independent of heap size</td><td>Latency-sensitive services with large heaps</td></tr>
+  <tr><td>Shenandoah</td><td><code>-XX:+UseShenandoahGC</code> (in many OpenJDK builds)</td><td>Low, concurrent compaction</td><td>Similar goals to ZGC</td></tr>
+  <tr><td>Parallel</td><td><code>-XX:+UseParallelGC</code></td><td>Longer, stop-the-world</td><td>Batch jobs where throughput is all that matters</td></tr>
+  <tr><td>Epsilon</td><td><code>-XX:+UseEpsilonGC</code> (experimental)</td><td>None: it never collects, and the JVM dies when the heap is full</td><td>Proving a code path is garbage-free, and benchmarks</td></tr>
+</table></div>
+<p>Concurrent collectors aren't free: they take CPU from your threads and add small costs (barriers) to reads and writes of references. Low pause is a trade, not a gift.</p>
+
+<h2 id="nogarbage">5. Garbage-free hot paths</h2>
+<p>The most reliable way to avoid GC pauses is to give the collector nothing to do on the critical path. Common techniques:</p>
+<div class="table-wrap"><table>
+  <tr><th>Technique</th><th>Example</th></tr>
+  <tr><td>Pre-allocate and reuse</td><td>The Disruptor's ring of <code>CommandSlot</code>s, made once at start-up</td></tr>
+  <tr><td>Flyweights over buffers</td><td>SBE encoders and decoders (see <a href="java-off-heap.html#flyweight">flyweights</a>)</td></tr>
+  <tr><td>Primitives, not boxes</td><td><code>long</code> not <code>Long</code>; primitive-keyed maps (Agrona, fastutil) instead of <code>HashMap&lt;Long, ...&gt;</code></td></tr>
+  <tr><td>Object pools</td><td>Reuse order objects from a free list instead of <code>new</code></td></tr>
+  <tr><td>Watch hidden allocation</td><td>String concatenation, varargs, autoboxing, capturing lambdas, iterators that escape, logging with formatted messages</td></tr>
+</table></div>
+<div class="note">Garbage-free code is harder to read and easy to get wrong (a reused object that someone still holds). Real systems apply it only where a profiler or a latency histogram shows allocation hurts.</div>
+
+<h2 id="jit">6. The JIT and warm-up</h2>
+<ol class="steps">
+  <li><strong>Interpreter.</strong> Bytecode runs instruction by instruction, while the JVM counts calls and branches.</li>
+  <li><strong>C1 (tiers 1 to 3).</strong> After some hundreds to thousands of calls, a quick compiler produces decent machine code with profiling built in.</li>
+  <li><strong>C2 (tier 4).</strong> After roughly ten thousand calls, the optimising compiler uses the profile: it inlines hot callees, removes unneeded checks, unrolls loops and applies escape analysis.</li>
+  <li><strong>Deoptimisation.</strong> C2 bets on what it saw ("this call always goes to <code>NewOrder</code>"). When a bet fails, the code is thrown away and the method runs slower until it's recompiled.</li>
+</ol>
+<p>Consequences for a trading system:</p>
+<ul>
+  <li><strong>The first orders of the day are slow</strong> unless the code is warmed up first. Firms replay recorded traffic before the open, so the JIT has seen every path. Prayog's replay tool could do exactly that.</li>
+  <li><strong>Rare paths are cold.</strong> The kill switch or a session halt may run interpreted the first time it's needed.</li>
+  <li><strong>Call sites with many receiver types</strong> ("megamorphic", more than two seen types) are hard to inline. A <code>switch</code> over a sealed type (as in Prayog's engine and codec) compiles to a type check per case, which stays predictable.</li>
+</ul>
+
+<h2 id="safepoints">7. Safepoints</h2>
+<p>Some JVM operations (most GC phases, deoptimisation, taking thread dumps) need every Java thread stopped at a known point, a <strong>safepoint</strong>. Threads only check for a pending safepoint at certain places (method returns, loop back-edges), so the pause includes "time to safepoint": waiting for the slowest thread to arrive. Logging with <code>-Xlog:safepoint</code> shows both parts. A long counted loop without a check can delay everyone.</p>
+
+<h2 id="measure">8. Measuring latency honestly</h2>
+<ul>
+  <li><strong>Microbenchmarks need JMH.</strong> A hand-written timing loop gets fooled by warm-up, dead-code elimination (the JIT removes work whose result you never use) and constant folding. JMH handles warm-up iterations, forks fresh JVMs and provides <code>Blackhole</code> to consume results. Prayog's <code>exchange-bench</code> module uses it in S9.</li>
+  <li><strong>Record full distributions.</strong> HdrHistogram records every latency into fixed-precision buckets cheaply, so p99.9 and max are exact, not averaged away.</li>
+  <li><strong>Avoid coordinated omission.</strong> A load generator that waits for each answer before sending the next stops sending during a stall. The stall then looks like <em>one</em> slow request instead of hundreds. Measure from when each request <em>should</em> have been sent (Gil Tene's term and fix, built into HdrHistogram).</li>
+</ul>
+
+<h2 id="sim">9. Try it: tails and pauses</h2>
+<p>A service handles requests at a steady rate, each in about 20 µs. Every so often the JVM pauses; requests arriving during the pause wait until it ends. Compare the honest percentiles with those of a load tester that suffers from coordinated omission.</p>
+<div class="sim">
+  <div class="form-grid">
+    <label>requests / s <input id="rps" type="number" value="10000" min="100" step="100"></label>
+    <label>pause length (ms) <input id="pause" type="number" value="20" min="0" step="1"></label>
+    <label>one pause every (s) <input id="every" type="number" value="5" min="0.1" step="0.1"></label>
+  </div>
+  <div class="out" id="tail"></div>
+</div>
+
+<h2 id="prayog">10. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Today</th><th>Why, and what's next</th></tr>
+  <tr><td>Commands and events are Java records, allocated per order</td><td>Clear and correct. S9 measures the cost before anything gets more complex (ADR 0006 trade-offs).</td></tr>
+  <tr><td>Ring slots, journal buffers and SBE flyweights are allocated once</td><td>The infrastructure is already garbage-free; only the domain objects allocate.</td></tr>
+  <tr><td>Default collector (G1)</td><td>Try ZGC once there's a latency histogram to compare against.</td></tr>
+  <tr><td>Sealed <code>Command</code> and <code>ExchangeEvent</code> with <code>switch</code></td><td>Exhaustive and JIT-friendly (see <a href="modern-java.html">modern Java</a>).</td></tr>
+  <tr><td><code>exchange-bench</code> module (JMH), HdrHistogram</td><td>S9: book operations and end-to-end latency, recorded in <code>docs/benchmarks.md</code> with method and machine.</td></tr>
+</table></div>
+
+<h2 id="faq">11. Questions</h2>
+<h3>Why not just make the heap huge so GC never runs?</h3>
+<p>Young collections still happen as the young generation fills; a bigger heap mostly makes the rare full collection longer. Some firms do size the heap so that no old-generation collection happens during a trading day and restart nightly, combined with very low allocation. That's a deliberate design, not a default.</p>
+<h3>Is C++ still better for this?</h3>
+<p>C++ has no GC or JIT warm-up, so its worst case is easier to control. Java teams get close with garbage-free code, careful warm-up and modern collectors, and gain safety and productivity. Several well-known exchanges and trading firms run their matching engines on the JVM.</p>
+<h3>What does "mechanical sympathy" mean?</h3>
+<p>Writing software that suits how the hardware works: sequential memory access, few cache misses, little contention, no needless allocation. The ring buffer, SBE and the single-writer engine are all examples.</p>
+
+<footer>Prayog learning pages &middot; Public sources: OpenJDK JEPs 333, 377, 439, 474 (ZGC); JMH and HdrHistogram documentation; Gil Tene's talks on coordinated omission. Related: <a href="java-memory-model.html">memory model</a>, <a href="java-off-heap.html">off-heap memory</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const pct = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor(p / 100 * sorted.length))];
+  const fmt = us => us >= 1000 ? (us / 1000).toFixed(2) + " ms" : us.toFixed(0) + " µs";
+  function simulate() {
+    const rps = Math.max(100, +$("rps").value), pauseMs = Math.max(0, +$("pause").value), every = Math.max(0.1, +$("every").value);
+    const seconds = 60, n = Math.min(600000, Math.round(rps * seconds));
+    const gap = 1e6 / rps, period = every * 1e6, pause = pauseMs * 1000;
+    let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const honest = [], naive = [];
+    let naiveClock = 0;
+    for (let i = 0; i < n; i++) {
+      const service = 15 + rnd() * 10;
+      // Honest: requests are scheduled every `gap` µs, whatever happens.
+      const t = i * gap, inCycle = t % period, wait = inCycle < pause ? pause - inCycle : 0;
+      honest.push(wait + service);
+      // Naive tester: sends the next request only after the previous answer, so a pause delays just one request.
+      if (naiveClock < i * gap) naiveClock = i * gap;
+      const c = naiveClock % period, w = c < pause ? pause - c : 0;
+      naive.push(w + service); naiveClock += w + service;
+      if (naiveClock > seconds * 1e6) break;
+    }
+    const h = honest.sort((a, b) => a - b), v = naive.sort((a, b) => a - b);
+    const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+    const row = (name, a) => `${name.padEnd(30)} ${fmt(mean(a)).padStart(9)} ${fmt(pct(a, 50)).padStart(9)} ${fmt(pct(a, 99)).padStart(9)} ${fmt(pct(a, 99.9)).padStart(9)} ${fmt(a[a.length - 1]).padStart(9)}`;
+    const hit = h.filter(x => x > 1000).length;
+    $("tail").textContent = [
+      `${"over 60 s".padEnd(30)} ${"mean".padStart(9)} ${"p50".padStart(9)} ${"p99".padStart(9)} ${"p99.9".padStart(9)} ${"max".padStart(9)}`,
+      row("honest (every request)", h),
+      row("coordinated omission", v),
+      ``,
+      `${hit.toLocaleString()} of ${h.length.toLocaleString()} requests (${(100 * hit / h.length).toFixed(2)}%) waited over 1 ms behind a pause.`,
+      `The naive tester saw only ${v.filter(x => x > 1000).length} slow request(s): it stopped sending while the service was stuck.`].join("\n");
+  }
+  ["rps", "pause", "every"].forEach(id => $(id).addEventListener("input", simulate));
+  simulate();
+})();
+</script>
+</body>
+</html>

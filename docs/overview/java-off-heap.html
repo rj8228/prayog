@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Off-Heap Memory in Java</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#warehouse">2. A business example</a>
+  <a href="#cost">3. What an object costs</a>
+  <a href="#kinds">4. Heap, direct, mapped</a>
+  <a href="#apis">5. Unsafe, VarHandle, FFM</a>
+  <a href="#agrona">6. Agrona and the JVM flag</a>
+  <a href="#flyweight">7. Flyweights</a>
+  <a href="#endian">8. Byte order</a>
+  <a href="#prayog">9. In Prayog</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>Off-heap memory, buffers and flyweights</h1>
+<p class="lede">Low-latency Java often works with raw bytes instead of objects: network packets, journal files, binary messages. This page explains Java's memory areas, the APIs for raw memory (from <code>ByteBuffer</code> to <code>Unsafe</code> to the new Foreign Memory API), the flyweight pattern behind SBE, and why Prayog's build needs an <code>--add-exports</code> flag.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>Java objects are convenient, but they come with costs a trading system notices:</p>
+<ul>
+  <li><strong>Overhead:</strong> every object has a header, and references point all over memory, which is bad for CPU caches.</li>
+  <li><strong>Garbage:</strong> creating an object per message means the garbage collector has work to do, and its pauses land on someone's order.</li>
+  <li><strong>I/O copies:</strong> the OS can't read a file or socket directly into a heap object, because the GC may move it. Data gets copied through a native buffer first.</li>
+</ul>
+<p>Working with flat byte buffers, ideally outside the heap, avoids all three.</p>
+
+<h2 id="warehouse">2. A business example: the managed storeroom vs. a rented warehouse</h2>
+<p>The office storeroom is run by facilities (the garbage collector). You ask for a shelf, they find one, and every so often they close the room to rearrange it (a GC pause). Easy, but you don't control when you're locked out.</p>
+<p>A rented warehouse (off-heap memory) you manage yourself. You know every shelf's address, nobody rearranges it, and trucks (the OS doing I/O) can unload straight onto it. But if you forget to clear a shelf, nobody does it for you.</p>
+
+<h2 id="cost">3. What an object costs</h2>
+<p>On a 64-bit HotSpot JVM with compressed pointers (the default under 32 GB of heap), every object has a 12-byte header, and sizes round up to 8 bytes:</p>
+<div class="table-wrap"><table>
+  <tr><th>Thing</th><th>Size</th><th>Note</th></tr>
+  <tr><td><code>long</code> in an array or field</td><td>8 bytes</td><td>The data itself</td></tr>
+  <tr><td><code>Long</code> (boxed)</td><td>16 bytes + a 4-byte reference to it</td><td>2.5&times; the data, plus a pointer chase</td></tr>
+  <tr><td>A <code>TreeMap</code> entry</td><td>about 40 bytes</td><td>Key, value, left, right, parent references and a colour flag</td></tr>
+  <tr><td>A 4-character <code>String</code></td><td>about 48 bytes</td><td>The String object plus its byte array</td></tr>
+  <tr><td>A whole NewOrder in SBE (client id "c1", symbol "INFY")</td><td>48 bytes</td><td>One flat run of bytes, no references</td></tr>
+</table></div>
+<p>Prayog's order book still uses <code>TreeMap&lt;Long, PriceLevel&gt;</code>: textbook, clear and correct. Whether flatter structures are worth it is a question for the S9 benchmarks, not a guess.</p>
+
+<h2 id="kinds">4. Heap, direct and mapped buffers</h2>
+<div class="table-wrap"><table>
+  <tr><th></th><th>Heap <code>byte[]</code> / <code>ByteBuffer.allocate</code></th><th>Direct <code>ByteBuffer.allocateDirect</code></th><th>Mapped <code>FileChannel.map</code></th></tr>
+  <tr><td>Lives in</td><td>Java heap</td><td>Native memory</td><td>The OS page cache, mapped into the process</td></tr>
+  <tr><td>Moved by GC</td><td>Yes</td><td>No</td><td>No</td></tr>
+  <tr><td>I/O</td><td>Copied through a temporary direct buffer</td><td>The OS reads and writes it directly</td><td>No read or write calls at all: touching memory <em>is</em> reading the file</td></tr>
+  <tr><td>Allocation</td><td>Fast</td><td>Slow (allocate once, reuse)</td><td>A system call; then page faults on first touch</td></tr>
+  <tr><td>Freed</td><td>By GC</td><td>When the buffer object is collected</td><td>When the buffer object is collected (no explicit unmap before the FFM API)</td></tr>
+  <tr><td>Size limit</td><td colspan="3">An <code>int</code> index: 2 GiB per <code>ByteBuffer</code>. This is why Prayog's segments are capped well below that.</td></tr>
+</table></div>
+
+<h2 id="apis">5. Unsafe, VarHandle and the Foreign Memory API</h2>
+<div class="table-wrap"><table>
+  <tr><th>API</th><th>Since</th><th>Status</th><th>Notes</th></tr>
+  <tr><td><code>ByteBuffer</code></td><td>Java 1.4</td><td>Supported</td><td>Bounds-checked; carries mutable position and limit, which makes sharing awkward. Default byte order is <strong>big-endian</strong>.</td></tr>
+  <tr><td><code>sun.misc.Unsafe</code></td><td>Early, never public</td><td>Memory-access methods deprecated for removal (JEP 471, Java 23)</td><td>Raw reads and writes at any address, CAS, fences. The engine of Netty, Agrona, the Disruptor 3.x and many more for two decades.</td></tr>
+  <tr><td><code>VarHandle</code></td><td>Java 9 (JEP 193)</td><td>Supported</td><td>Typed access to fields, arrays and byte buffers, with memory-order modes (plain, opaque, release/acquire, volatile). The safe replacement for Unsafe's atomics. See <a href="java-memory-model.html">the memory model</a>.</td></tr>
+  <tr><td>Foreign Function &amp; Memory API (<code>MemorySegment</code>, <code>Arena</code>)</td><td>Final in Java 22 (JEP 454); preview in Java 21</td><td>Supported</td><td>64-bit sizes, deterministic freeing (closing an arena), bounds and lifetime checks, plus calling native code without JNI. The long-term home for off-heap work.</td></tr>
+</table></div>
+<p>Prayog targets Java 21, where FFM is still a preview, so it uses Agrona's buffers instead.</p>
+
+<h2 id="agrona">6. Agrona and the <code>--add-exports</code> flag</h2>
+<p><strong>Agrona</strong> (by Real Logic, the authors of SBE and Aeron) is a library of low-latency building blocks: <code>DirectBuffer</code> (read), <code>MutableDirectBuffer</code> (write), <code>UnsafeBuffer</code> (wraps a <code>byte[]</code>, a <code>ByteBuffer</code> or a raw address), <code>ExpandableArrayBuffer</code>, plus primitive collections and ring buffers. SBE's generated code reads and writes through these interfaces.</p>
+<p>Agrona 2.x uses the JDK's internal <code>jdk.internal.misc.Unsafe</code>. Since Java 16 (JEP 396) and 17 (JEP 403), the module system strongly encapsulates JDK internals, so a library may only touch them if you say so on the command line:</p>
+<pre><code>--add-exports java.base/jdk.internal.misc=ALL-UNNAMED</code></pre>
+<div class="table-wrap"><table>
+  <tr><th>Flag</th><th>Allows</th></tr>
+  <tr><td><code>--add-exports module/package=target</code></td><td>Compiling against and calling <em>public</em> types of a non-exported package</td></tr>
+  <tr><td><code>--add-opens module/package=target</code></td><td>Also deep reflection into <em>private</em> members (<code>setAccessible(true)</code>)</td></tr>
+</table></div>
+<p><code>ALL-UNNAMED</code> means "all code on the classpath". Without the flag, the first Agrona buffer fails with <code>IllegalAccessError ... does not export jdk.internal.misc</code>, which is exactly what S8's first test run showed.</p>
+
+<h2 id="flyweight">7. The flyweight pattern</h2>
+<p>A flyweight is one small, reusable object that gives a typed view over bytes it doesn't own. Instead of decoding 1,000 messages into 1,000 objects, you point one decoder at each message in turn:</p>
+<pre><code>NewOrderDecoder d = new NewOrderDecoder();        // made once
+for (each record in the journal) {
+    d.wrapAndApplyHeader(buffer, offset, header);  // re-point; no allocation
+    long price = d.price();                          // reads 8 bytes at offset + 18
+}</code></pre>
+<div class="warn"><strong>The catch:</strong> the view is only valid while those bytes are. Keep a reference to the decoder (or to the buffer of a <code>RecordVisitor</code> callback) after it moves on and you read someone else's data. Prayog's <code>RecordVisitor</code> documents "valid only during the call", and a codec instance is not thread-safe because its flyweights hold a position.</div>
+<p>The same idea appears all over Prayog: the Disruptor's pre-allocated <code>CommandSlot</code>s are reused for every command, so a downstream handler must copy what it wants to keep.</p>
+
+<h2 id="endian">8. Byte order (endianness)</h2>
+<p>A <code>long</code> is 8 bytes. Big-endian stores the most significant byte first (how we write numbers, and the "network byte order"); little-endian stores the least significant byte first (how x86 and ARM hold numbers in memory).</p>
+<div class="sim">
+  <div class="form-grid"><label>A long value <input id="num" value="150000"></label></div>
+  <div class="out" id="endianOut"></div>
+</div>
+<div class="warn"><code>ByteBuffer</code> defaults to big-endian, whatever the CPU. Writing with a default <code>ByteBuffer</code> and reading with a little-endian <code>UnsafeBuffer</code> turns 150,000 into a huge number. Prayog sets <code>ByteOrder.LITTLE_ENDIAN</code> explicitly on every buffer that touches the journal, to match the SBE schema.</div>
+
+<h2 id="prayog">9. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th>What</th></tr>
+  <tr><td><code>FileJournal</code></td><td>A 1 MiB direct, little-endian write buffer, reused; grows only for an oversized record</td></tr>
+  <tr><td><code>Segments.scan</code></td><td>Memory-maps each segment read-only and wraps it in an <code>UnsafeBuffer</code> for the codec</td></tr>
+  <tr><td><code>JournalCodec</code></td><td>One flyweight encoder and decoder per message type, reused; one codec per thread</td></tr>
+  <tr><td><code>JournalHandler</code></td><td>An <code>ExpandableDirectByteBuffer</code> reused for every command and event</td></tr>
+  <tr><td>Parent <code>pom.xml</code></td><td><code>agrona.jvm.args</code> passes the <code>--add-exports</code> flag to Surefire and Failsafe</td></tr>
+</table></div>
+
+<h2 id="faq">10. Questions</h2>
+<h3>Does off-heap mean no garbage collection at all?</h3>
+<p>No. The <code>ByteBuffer</code> object that owns the native memory is still a heap object, and the memory is freed when it's collected. The win is that the big data isn't scanned or moved, and that you allocate it once and reuse it.</p>
+<h3>Why are memory-mapped reads fast?</h3>
+<p>No system call per read and no copy: the file's pages in the page cache are mapped straight into the process. The first touch of each page costs a page fault; later touches are ordinary memory reads.</p>
+<h3>When should I reach for any of this?</h3>
+<p>Only after a benchmark says the simple version is too slow. Plain objects and collections are easier to read and to get right; Prayog keeps them on the engine's books until S9's numbers argue otherwise.</p>
+
+<footer>Prayog learning pages &middot; Public sources: JEP 193, 396, 403, 454, 471; Agrona and SBE project documentation. Related: <a href="sbe.html">SBE</a>, <a href="java-gc-jit.html">GC and JIT</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const el = document.getElementById("num"), out = document.getElementById("endianOut");
+  function render() {
+    let v;
+    try { v = BigInt.asIntN(64, BigInt(el.value.trim() || "0")); } catch { out.textContent = "Enter a whole number."; return; }
+    const dv = new DataView(new ArrayBuffer(8)), hex = [];
+    const dump = le => { dv.setBigInt64(0, v, le); const b = []; for (let i = 0; i < 8; i++) b.push(dv.getUint8(i).toString(16).padStart(2, "0")); return b.join(" "); };
+    const be = dump(false), le = dump(true);
+    dv.setBigInt64(0, v, false);
+    const misread = dv.getBigInt64(0, true);
+    out.textContent = [
+      `byte index        0  1  2  3  4  5  6  7`,
+      `big-endian:       ${be}    (ByteBuffer default, network order)`,
+      `little-endian:    ${le}    (x86, ARM, SBE in Prayog)`,
+      ``,
+      `Written big-endian but read little-endian: ${misread.toLocaleString()}`].join("\n");
+  }
+  el.addEventListener("input", render); render();
+})();
+</script>
+</body>
+</html>

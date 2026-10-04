@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journaling Explained</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  .recs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; min-height: 44px; }
+  .rec { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 6px 8px; border-radius: 6px; border: 1.5px solid var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+  .rec.torn { border-style: dashed; }
+  .zone { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#ledger">2. A business example</a>
+  <a href="#stack">3. Where bytes really go</a>
+  <a href="#wal">4. Write-ahead journal</a>
+  <a href="#group">5. Group commit</a>
+  <a href="#torn">6. Torn writes and CRC</a>
+  <a href="#sim">7. Crash it</a>
+  <a href="#segments">8. Segments and recovery</a>
+  <a href="#replay">9. Replay and determinism</a>
+  <a href="#prayog">10. In Prayog</a>
+  <a href="#faq">11. Questions</a>
+</nav>
+<main>
+<h1>Journaling: never forget a trade</h1>
+<p class="lede">How an exchange makes sure that anything it has told a client survives a crash, without making every order wait for a slow disk. Covers fsync, write-ahead logs, group commit, torn writes, checksums, segments and deterministic replay, and how Prayog's S8 journal does each.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>The matching engine keeps the order books in memory, because memory is fast. But memory is wiped by a crash, a power cut or a deploy. Two promises must still hold:</p>
+<ul>
+  <li><strong>Nothing acknowledged is ever lost.</strong> If a client was told "filled", the fill exists after a restart.</li>
+  <li><strong>The market comes back exactly as it was.</strong> Same resting orders, same queue positions, same next order id.</li>
+</ul>
+<p>Saving the whole book after every order would be far too slow. The trick is to save the <em>inputs</em>, cheaply and in order.</p>
+
+<h2 id="ledger">2. A business example: the cashier's register tape</h2>
+<p>A shop cashier doesn't count the drawer after every sale. The register prints every sale onto a paper tape as it happens. If the drawer is stolen, the owner replays the tape from the morning float and knows exactly what should be there.</p>
+<ul>
+  <li>The tape is <strong>append-only</strong>: nobody rubs out a line.</li>
+  <li>The customer gets the receipt <strong>after</strong> the line is printed on the tape, never before.</li>
+  <li>If the printer jams mid-line, that half line is obviously garbage and is crossed out; the sale is re-rung.</li>
+</ul>
+<p>Prayog's journal is that tape. The drawer is the in-memory order book.</p>
+
+<h2 id="stack">3. Where bytes really go</h2>
+<svg viewBox="0 0 860 170" role="img" aria-label="A write passes from the application buffer to the operating system page cache to the drive's cache to permanent storage. write() reaches the page cache; fsync pushes to permanent storage.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <rect class="box" x="10" y="30" width="170" height="56" rx="8"/><text x="95" y="54" text-anchor="middle">App buffer</text><text x="95" y="72" text-anchor="middle" class="small muted">Java heap / direct buffer</text>
+  <rect class="box" x="230" y="30" width="170" height="56" rx="8"/><text x="315" y="54" text-anchor="middle">OS page cache</text><text x="315" y="72" text-anchor="middle" class="small muted">kernel memory</text>
+  <rect class="box" x="450" y="30" width="170" height="56" rx="8"/><text x="535" y="54" text-anchor="middle">Drive cache</text><text x="535" y="72" text-anchor="middle" class="small muted">volatile RAM in the SSD</text>
+  <rect class="box" x="670" y="30" width="170" height="56" rx="8"/><text x="755" y="54" text-anchor="middle">Flash / platter</text><text x="755" y="72" text-anchor="middle" class="small muted">survives power loss</text>
+  <line x1="180" y1="58" x2="226" y2="58" class="line" marker-end="url(#a)"/><line x1="400" y1="58" x2="446" y2="58" class="line" marker-end="url(#a)"/><line x1="620" y1="58" x2="666" y2="58" class="line" marker-end="url(#a)"/>
+  <text x="205" y="110" text-anchor="middle" class="small">write()</text><text x="205" y="125" text-anchor="middle" class="small muted">microseconds</text>
+  <line x1="315" y1="140" x2="755" y2="140" class="line" marker-end="url(#a)"/><text x="535" y="160" text-anchor="middle" class="small">fsync / FileChannel.force(): roughly 0.05 to 10 ms, depending on the drive</text>
+</svg>
+<div class="table-wrap"><table>
+  <tr><th>Call</th><th>What it guarantees</th></tr>
+  <tr><td><code>write()</code></td><td>The OS has the bytes. A process crash is fine; a power cut or kernel panic loses them.</td></tr>
+  <tr><td><code>fsync()</code></td><td>Data and all metadata (size, timestamps) are on stable storage.</td></tr>
+  <tr><td><code>fdatasync()</code> = <code>force(false)</code></td><td>Data and the metadata needed to read it back (the file size), but not timestamps. Cheaper; what Prayog uses per batch.</td></tr>
+  <tr><td>fsync of the directory</td><td>A newly created or deleted file <em>name</em> is durable. Needed when a new segment file is created.</td></tr>
+</table></div>
+<div class="warn">On macOS, plain <code>fsync</code> may leave data in the drive's own cache; only <code>F_FULLFSYNC</code> forces it out. Production exchanges run on Linux with enterprise SSDs that have power-loss protection, which makes their cache safe.</div>
+
+<h2 id="wal">4. The write-ahead journal</h2>
+<p>The rule: <strong>write the input down durably before anyone sees its effect</strong>. Because Prayog's engine is deterministic (no clock reads, no randomness), its state is a pure function of its inputs:</p>
+<pre><code>state = setup + command₁ + command₂ + ... + commandₙ</code></pre>
+<p>So the input journal is all the database the engine needs. This style is called <strong>event sourcing</strong>: you never store the current state, you store what happened, and rebuild state by replaying it. Prayog keeps two logs:</p>
+<div class="table-wrap"><table>
+  <tr><th>Log</th><th>Holds</th><th>Used for</th></tr>
+  <tr><td><code>input-*.seg</code></td><td>Record 0: the engine setup. Then every command at its input sequence.</td><td>Recovery and replay. The source of truth.</td></tr>
+  <tr><td><code>events-*.seg</code></td><td>Every event at its event seq.</td><td>Determinism checksums; later, Kafka catch-up. Can be rebuilt from the input log.</td></tr>
+</table></div>
+
+<h2 id="group">5. Group commit: one fsync for many orders</h2>
+<p>If every order waited for its own fsync, throughput would be capped at 1 / fsync-time: with a 1 ms fsync, 1,000 orders a second. Group commit flushes once for a whole batch. The Disruptor hands each handler an <code>endOfBatch</code> flag when it has caught up with the ring, which is exactly when to flush:</p>
+<ul>
+  <li><strong>Busy market:</strong> 500 orders arrive during one fsync. The next batch is those 500, written together, flushed once.</li>
+  <li><strong>Quiet market:</strong> each batch is a single order. It waits for one flush, no more.</li>
+</ul>
+<p>Latency adapts to load automatically; nobody has to tune a timer.</p>
+<div class="sim">
+  <div class="form-grid">
+    <label>fsync time (ms) <input id="fs" type="number" value="1" min="0.05" step="0.05"></label>
+    <label>orders arriving / s <input id="rate" type="number" value="50000" min="1" step="1000"></label>
+  </div>
+  <div class="out" id="gc"></div>
+</div>
+
+<h2 id="torn">6. Torn writes and checksums</h2>
+<p>A crash can stop a write at any byte, leaving the last record half on disk: a <strong>torn write</strong>. Each Prayog record is framed so that a torn one is always detectable:</p>
+<pre><code>[length 4][seq 8][payload: SBE message][crc32c 4]</code></pre>
+<ul>
+  <li>If the <strong>length</strong> says the record runs past the end of the file, it's torn.</li>
+  <li>If the bytes are all there but the <strong>CRC32C</strong> (a checksum over length, seq and payload) doesn't match, it's torn or damaged.</li>
+</ul>
+<p>CRC32C is the Castagnoli variant of CRC-32. Modern CPUs compute it in hardware (an SSE4.2 instruction on x86, an equivalent on ARM), and Java has had <code>java.util.zip.CRC32C</code> since Java 9.</p>
+<div class="note"><strong>Torn tail vs. corruption.</strong> Only the last record can legitimately be torn: it was never flushed, so no client was told about it, and cutting it off loses nothing promised. A bad record <em>before</em> the end means flushed data was lost. That's real corruption, and the safe response is to stop and alert a human, not to guess.</div>
+
+<h2 id="sim">7. Crash it</h2>
+<p>Append orders, flush whenever you like, then pull the plug. Records in the page cache are lost; the record being written when the plug was pulled may be torn. Then recover.</p>
+<div class="sim">
+  <div class="controls">
+    <button class="primary" id="append">Append order</button>
+    <button id="append5">Append 5</button>
+    <button id="flush">Flush (fsync)</button>
+    <button id="crash">Pull the plug</button>
+    <button id="recover">Recover</button>
+    <button id="reset">Reset</button>
+  </div>
+  <div class="zone">On disk (durable)</div><div class="recs" id="disk"></div>
+  <div class="zone">In the page cache (not yet durable)</div><div class="recs" id="cache"></div>
+  <div class="legend"><span style="--c:var(--ok)">durable</span><span style="--c:var(--f1)">buffered</span><span style="--c:var(--hot)">torn (bad CRC)</span><span style="--c:var(--accent)">acknowledged to client</span></div>
+  <div class="out" id="simlog" style="margin-top:10px;max-height:160px;overflow-y:auto"></div>
+</div>
+
+<h2 id="segments">8. Segments and recovery</h2>
+<p>One endless file is awkward: you can't archive part of it, and recovery would scan from the start. So the journal is split into <strong>segments</strong> of at most 64 MiB, named by their first sequence number:</p>
+<pre><code>input-00000000000000000000.seg   seq 0 .. 1,480,211
+input-00000000000001480212.seg   seq 1,480,212 .. now</code></pre>
+<p>Each segment starts with a 16-byte header (magic <code>PRYJ</code>, format version, first seq) so a stray file is never mistaken for a journal. On startup:</p>
+<ol class="steps">
+  <li>Scan every segment in order, checking CRCs and that seqs only go up.</li>
+  <li>Damage in an earlier segment: refuse to start (corruption).</li>
+  <li>Damage at the end of the last segment: <strong>truncate</strong> the file to the last good record.</li>
+  <li>A last segment shorter than its header (crash while creating it): delete it.</li>
+  <li>Continue appending after the last good record.</li>
+</ol>
+<p>Why truncate rather than just skip? If you write a shorter new record over the torn bytes, the leftover tail bytes stay behind it, and a later read can trip over them. Prayog's first test suite missed this; the test now cuts the file at every possible byte and checks that the file really shrinks.</p>
+
+<h2 id="replay">9. Replay and determinism</h2>
+<p>Replay feeds the input journal, in order, into a fresh engine on one thread. If the engine is deterministic, it must produce the exact same events. Prayog checks it by computing SHA-256 over the replayed events and comparing with the recorded event log. A match proves the engine has no hidden inputs:</p>
+<ul>
+  <li>no wall-clock reads (time arrives as <code>ClockTick</code> commands);</li>
+  <li>no unseeded randomness;</li>
+  <li>no output that depends on hash-map iteration order or thread timing.</li>
+</ul>
+<p>In S8, a planted <code>System.nanoTime()</code> in the trade event was caught, and the check named the first differing event (#49). The same property is what will let a standby engine follow the primary by replaying its journal: both compute identical state from identical input.</p>
+
+<h2 id="prayog">10. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Class</th><th>Job</th></tr>
+  <tr><td><code>Journal</code></td><td>Interface: <code>append(seq, bytes)</code>, <code>flush()</code>, <code>lastSeq()</code></td></tr>
+  <tr><td><code>FileJournal</code></td><td>Segment files, 1 MiB write buffer, CRC32C, fdatasync, recovery on open</td></tr>
+  <tr><td><code>JournalReader</code></td><td>Reads all segments in order through memory-mapped files</td></tr>
+  <tr><td><code>JournalHandler</code></td><td>Pipeline stage 1: encodes the command and its events with <a href="sbe.html">SBE</a>, flushes on <code>endOfBatch</code></td></tr>
+  <tr><td><code>Replay</code>, <code>ReplayCheck</code></td><td>Rebuild a session from the input journal; compare SHA-256; name the first difference</td></tr>
+  <tr><td><code>make replay-check</code></td><td>CI job: record 51k commands from 5 threads, replay, compare</td></tr>
+</table></div>
+
+<h2 id="faq">11. Questions</h2>
+<h3>Why not just use a database?</h3>
+<p>A database round trip costs far more than an append to a local file, and it sits on the order path, which Prayog's invariants forbid. Databases themselves are built on exactly this technique: PostgreSQL's WAL, Kafka's log segments, and every LSM-tree store start with an append-only, checksummed, fsynced log.</p>
+<h3>What about losing the whole machine?</h3>
+<p>A local journal survives crashes and power cuts, not a dead disk. Production venues replicate the journal to a standby (often by sending the sequenced input stream and having the standby replay it) and acknowledge only once a quorum has it. Prayog's single machine is an MVP choice.</p>
+<h3>Why write through a buffer instead of memory-mapping the file for writes?</h3>
+<p>Both are common. Buffered writes plus <code>force()</code> keep failure handling simple (an I/O error is an exception, not a crash on a page fault) and make the flush point explicit. The reader does use memory mapping, because reading mapped segments is fast and simple.</p>
+
+<footer>Prayog learning pages &middot; S8 &middot; Related: <a href="sbe.html">SBE</a>, <a href="ring-buffer.html">ring buffer</a>, <a href="java-off-heap.html">off-heap memory</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // Group commit calculator: arrivals during one fsync form the next batch.
+  function gc() {
+    const fs = Math.max(0.01, +$("fs").value), rate = Math.max(1, +$("rate").value);
+    const per = 1000 / fs;
+    const batch = Math.max(1, Math.round(rate * fs / 1000));
+    const lines = [
+      `One fsync per order:  at most ${Math.round(per).toLocaleString()} orders/s. ${rate > per ? "Can't keep up: the ring fills and the gateway answers 'busy'." : "Keeps up."}`,
+      `Group commit:         about ${batch.toLocaleString()} order(s) per flush, ${Math.round(rate / batch).toLocaleString()} flushes/s, keeps up with ${rate.toLocaleString()} orders/s.`,
+      `Extra latency:        about one fsync (${fs} ms) plus the wait for the current flush to finish, at most ${(2 * fs).toFixed(2)} ms.`];
+    $("gc").textContent = lines.join("\n");
+  }
+  ["fs", "rate"].forEach(id => $(id).addEventListener("input", gc)); gc();
+
+  // Crash simulator.
+  let disk, cache, seq, acked, crashed;
+  const log = m => { $("simlog").textContent = m + "\n" + $("simlog").textContent; };
+  function reset() { disk = []; cache = []; seq = 0; acked = 0; crashed = false; $("simlog").textContent = ""; log("Empty journal. Append some orders."); draw(); }
+  function draw() {
+    const chip = (r, c) => `<span class="rec${r.torn ? " torn" : ""}" style="--c:var(${c})" title="seq ${r.seq}">#${r.seq}${r.seq <= acked ? " &#10003;" : ""}${r.torn ? " torn" : ""}</span>`;
+    $("disk").innerHTML = disk.map(r => chip(r, r.torn ? "--hot" : r.seq <= acked ? "--accent" : "--ok")).join("") || '<span class="zone">nothing yet</span>';
+    $("cache").innerHTML = cache.map(r => chip(r, "--f1")).join("") || '<span class="zone">empty</span>';
+  }
+  function append(n) {
+    if (crashed) { log("The machine is down. Recover first."); return; }
+    for (let i = 0; i < n; i++) cache.push({ seq: ++seq });
+    log(`Appended up to #${seq}. Not durable yet, so no client has been answered.`); draw();
+  }
+  function flush() {
+    if (crashed) { log("The machine is down. Recover first."); return; }
+    if (!cache.length) { log("Nothing to flush."); return; }
+    disk.push(...cache); cache = []; acked = seq;
+    log(`fsync: #${disk[disk.length - 1].seq} and everything before it is durable. Clients answered (✓).`); draw();
+  }
+  function crash() {
+    if (crashed) { log("Already down."); return; }
+    crashed = true;
+    const lost = cache.length;
+    if (lost && Math.random() < 0.7) {
+      // The OS had started writing the first buffered record when power went.
+      disk.push({ seq: cache[0].seq, torn: true });
+      log(`Power cut! #${cache[0].seq} was half written (torn); ${lost - 1} other buffered record(s) vanished.`);
+    } else {
+      log(`Power cut! ${lost} buffered record(s) vanished${lost ? "" : " (nothing was buffered)"}.`);
+    }
+    cache = []; draw();
+  }
+  function recover() {
+    if (!crashed) { log("Nothing to recover: the machine is up."); return; }
+    const torn = disk.filter(r => r.torn).length;
+    disk = disk.filter(r => !r.torn); crashed = false;
+    seq = disk.length ? disk[disk.length - 1].seq : 0;
+    log(`Recovery: scanned the segment, ${torn ? "torn tail failed its CRC and was truncated, " : ""}continuing after #${seq}. Every answered order (✓) is still here; ${acked > seq ? "BUG" : "nothing promised was lost"}.`);
+    draw();
+  }
+  $("append").onclick = () => append(1); $("append5").onclick = () => append(5);
+  $("flush").onclick = flush; $("crash").onclick = crash; $("recover").onclick = recover; $("reset").onclick = reset;
+  reset();
+})();
+</script>
+</body>
+</html>

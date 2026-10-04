@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java Memory Model</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#office">2. A business example</a>
+  <a href="#wrong">3. What goes wrong</a>
+  <a href="#litmus">4. Try it: a litmus test</a>
+  <a href="#hb">5. Happens-before</a>
+  <a href="#tools">6. The tools</a>
+  <a href="#cache">7. Cache lines and false sharing</a>
+  <a href="#disruptor">8. How the Disruptor uses all this</a>
+  <a href="#prayog">9. In Prayog</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>The Java Memory Model</h1>
+<p class="lede">When one thread writes a value and another reads it, when is the reader guaranteed to see it? The answer is the Java Memory Model (JMM). It is the foundation under <code>volatile</code>, <code>synchronized</code>, atomics and the Disruptor, and it's a favourite topic in low-latency Java interviews.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>You'd expect a write by one thread to be visible to every other thread immediately, in the order it was written. On real hardware it isn't:</p>
+<ul>
+  <li><strong>CPU caches and store buffers.</strong> Each core writes into its own store buffer and cache first. Other cores see the write later.</li>
+  <li><strong>Compiler reordering.</strong> The JIT compiler may reorder, merge or hoist reads and writes if a single thread can't tell the difference.</li>
+  <li><strong>CPU reordering.</strong> Cores execute out of order. ARM (Apple M-series, AWS Graviton) reorders more than x86.</li>
+</ul>
+<p>All three are great for single-threaded speed and invisible to a single thread. They only show up when threads share data. The JMM says exactly which reorderings are allowed and how to forbid them.</p>
+
+<h2 id="office">2. A business example: the office with private notepads</h2>
+<p>Workers sit at desks with their own notepads (CPU caches). There's one shared filing cabinet (main memory). Workers copy what they need onto their notepad and update the cabinet when convenient, not necessarily in the order they made notes.</p>
+<p>Alice writes the report, then puts a "report ready" sticky note in the cabinet. Bob sees the sticky note and goes to read the report... but Alice's notepad pushed the sticky note to the cabinet <em>before</em> the report. Bob reads an empty report.</p>
+<p>The fix is an office rule: "anything you wrote before posting a <strong>release</strong> note must reach the cabinet before the note does, and anyone who <strong>acquires</strong> (reads) that note must re-read the cabinet afterwards." That's exactly what a <code>volatile</code> write and read do.</p>
+
+<h2 id="wrong">3. What goes wrong without it</h2>
+<div class="table-wrap"><table>
+  <tr><th>Problem</th><th>Example</th><th>Fix</th></tr>
+  <tr><td><strong>Visibility</strong></td><td><code>while (!stop) {}</code> never ends: the JIT reads <code>stop</code> once and loops forever.</td><td><code>volatile boolean stop</code></td></tr>
+  <tr><td><strong>Reordering</strong></td><td><code>data = 42; ready = true;</code> Another thread sees <code>ready</code> but <code>data == 0</code>.</td><td>Make <code>ready</code> volatile (a release/acquire pair)</td></tr>
+  <tr><td><strong>Atomicity</strong></td><td><code>count++</code> is read, add, write. Two threads lose updates.</td><td><code>AtomicLong.incrementAndGet()</code>, a lock, or a single writer</td></tr>
+  <tr><td><strong>Check-then-act</strong></td><td><code>if (!map.containsKey(k)) map.put(k, v)</code> from two threads</td><td><code>computeIfAbsent</code> on a <code>ConcurrentHashMap</code></td></tr>
+  <tr><td><strong>Unsafe publication</strong></td><td>Assigning a new object to a plain shared field; another thread sees it half-built.</td><td>Final fields, volatile field, or hand-off through a concurrent structure</td></tr>
+</table></div>
+
+<h2 id="litmus">4. Try it: the "store buffering" litmus test</h2>
+<p>Two threads, two shared variables, both start at 0:</p>
+<pre><code>Thread 1:  x = 1;  r1 = y;
+Thread 2:  y = 1;  r2 = x;</code></pre>
+<p>If memory behaved like one shared whiteboard, at least one thread would see the other's write, so <code>r1 = r2 = 0</code> would be impossible. Pick a field type and see what the JMM allows.</p>
+<div class="sim">
+  <div class="controls">
+    <label style="flex-direction:row;align-items:center;gap:8px">x and y are
+      <select id="mode"><option value="plain">plain fields</option><option value="volatile">volatile fields</option></select></label>
+  </div>
+  <div class="out" id="litmusOut"></div>
+</div>
+<p>With plain fields, each core's write sits in its store buffer while the next instruction, the read, goes ahead. Both reads see the old 0. This really happens on x86 and ARM. Declaring the fields <code>volatile</code> makes all volatile accesses behave as if they ran in one global order, which forbids it.</p>
+
+<h2 id="hb">5. Happens-before</h2>
+<p>The JMM's core idea: if action A <strong>happens-before</strong> action B, then B sees everything A (and everything before A) wrote. If there's no happens-before path between a write and a read of the same variable, and at least one is a write, that's a <strong>data race</strong> and almost anything is allowed. The edges:</p>
+<div class="table-wrap"><table>
+  <tr><th>Edge</th><th>Meaning</th></tr>
+  <tr><td>Program order</td><td>Within one thread, earlier statements happen-before later ones.</td></tr>
+  <tr><td>Monitor</td><td>Releasing a lock (end of <code>synchronized</code>) happens-before the next acquire of the same lock.</td></tr>
+  <tr><td>Volatile</td><td>A write to a volatile field happens-before every later read of that field that sees it.</td></tr>
+  <tr><td>Thread start / join</td><td><code>t.start()</code> happens-before everything in <code>t</code>; everything in <code>t</code> happens-before <code>t.join()</code> returning.</td></tr>
+  <tr><td>Final fields</td><td>After a constructor finishes, other threads see its final fields correctly, even without synchronization (if <code>this</code> didn't escape).</td></tr>
+  <tr><td>Concurrency utilities</td><td>Putting into a <code>BlockingQueue</code>, submitting to an executor, completing a future: each documents a happens-before edge.</td></tr>
+  <tr><td>Transitivity</td><td>A hb B and B hb C means A hb C. This is how a single volatile write can publish a whole batch of plain writes.</td></tr>
+</table></div>
+
+<h2 id="tools">6. The tools, from weakest to strongest</h2>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Gives you</th><th>Cost</th></tr>
+  <tr><td>Plain field</td><td>Nothing across threads</td><td>Free</td></tr>
+  <tr><td><code>VarHandle</code> opaque</td><td>The value isn't cached forever, but no ordering of other fields</td><td>Almost free</td></tr>
+  <tr><td>Release write / acquire read<br><code>setRelease</code>, <code>getAcquire</code> (formerly <code>lazySet</code>)</td><td>Everything before the release is visible to whoever acquires it. Exactly the "publish a message" pattern.</td><td>Cheap. On x86 just a compiler barrier.</td></tr>
+  <tr><td><code>volatile</code> / <code>VarHandle</code> volatile</td><td>Release + acquire + one global order of all volatile accesses</td><td>A full fence on the write (on x86 a locked instruction, tens of cycles)</td></tr>
+  <tr><td>CAS: <code>compareAndSet</code>, <code>getAndAdd</code></td><td>Atomic read-modify-write; lock-free algorithms</td><td>Tens of cycles, much more under contention as the cache line bounces between cores</td></tr>
+  <tr><td><code>synchronized</code> / <code>ReentrantLock</code></td><td>Mutual exclusion + visibility</td><td>Cheap uncontended; under contention threads park, costing microseconds</td></tr>
+</table></div>
+<p><code>VarHandle</code> (Java 9) is the supported way to get the fine-grained modes; before it, libraries used <code>sun.misc.Unsafe</code>. See <a href="java-off-heap.html">off-heap memory</a>.</p>
+
+<h2 id="cache">7. Cache lines and false sharing</h2>
+<p>Caches move memory in <strong>cache lines</strong>: 64 bytes on x86 and most ARM servers, 128 bytes on Apple M-series. Cores keep their copies consistent with a coherence protocol (MESI and variants): to write a line, a core must own it exclusively, which invalidates every other core's copy.</p>
+<svg viewBox="0 0 860 180" role="img" aria-label="Two counters written by two different threads share one 64-byte cache line, so each write invalidates the other core's copy. Padding puts them on separate lines.">
+  <text x="10" y="20">False sharing</text>
+  <rect x="10" y="30" width="400" height="40" rx="6" class="box"/>
+  <rect x="14" y="34" width="60" height="32" rx="4" style="fill:var(--f4);opacity:.45"/><text x="44" y="55" text-anchor="middle" class="small">A</text>
+  <rect x="78" y="34" width="60" height="32" rx="4" style="fill:var(--f2);opacity:.45"/><text x="108" y="55" text-anchor="middle" class="small">B</text>
+  <text x="270" y="55" text-anchor="middle" class="small muted">one 64-byte line</text>
+  <text x="10" y="92" class="small muted">Core 1 writes A, core 2 writes B: the line ping-pongs between cores on every write.</text>
+  <text x="450" y="20">Padded</text>
+  <rect x="450" y="30" width="190" height="40" rx="6" class="box"/><rect x="454" y="34" width="60" height="32" rx="4" style="fill:var(--f4);opacity:.45"/><text x="484" y="55" text-anchor="middle" class="small">A</text><text x="580" y="55" text-anchor="middle" class="small muted">padding</text>
+  <rect x="650" y="30" width="190" height="40" rx="6" class="box"/><rect x="654" y="34" width="60" height="32" rx="4" style="fill:var(--f2);opacity:.45"/><text x="684" y="55" text-anchor="middle" class="small">B</text><text x="780" y="55" text-anchor="middle" class="small muted">padding</text>
+  <text x="450" y="92" class="small muted">Each value owns its line: no interference.</text>
+  <text x="10" y="140" class="small">Fix: pad with unused fields (what the Disruptor's Sequence does), or @jdk.internal.vm.annotation.Contended</text>
+  <text x="10" y="158" class="small muted">(@Contended needs -XX:-RestrictContended outside the JDK).</text>
+</svg>
+<p>Two unrelated counters, written by two threads, that happen to sit in the same line slow each other down as if they were one shared variable. Benchmarks commonly show several times lower throughput. Nothing in the source code reveals it; you find it by measuring.</p>
+
+<h2 id="disruptor">8. How the Disruptor uses all this</h2>
+<ol class="steps">
+  <li><strong>Claim.</strong> With many producers, a producer claims the next sequence with an atomic operation on the shared cursor. That is the only contended write.</li>
+  <li><strong>Write.</strong> It writes the command into the pre-allocated slot with plain writes. The slot is its own until published.</li>
+  <li><strong>Publish.</strong> It marks the sequence as available with a <em>release</em> write. Everything written to the slot before is now visible to anyone who acquires it.</li>
+  <li><strong>Consume.</strong> The matching thread reads the available sequence with an <em>acquire</em> read, then reads the slot with plain reads. Safe, by transitivity.</li>
+  <li><strong>Each consumer has its own padded sequence</strong> that only it writes (the single-writer principle), so there is no CAS on the consumer side and no false sharing between stages.</li>
+</ol>
+<div class="note">The <strong>single-writer principle</strong> (Martin Thompson): if exactly one thread ever writes a piece of data, you never need a lock or CAS for it, only a release write so readers see it. Prayog's matching thread is the single writer of all engine state.</div>
+
+<h2 id="prayog">9. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th>Why it's safe</th></tr>
+  <tr><td><code>MatchingEngine</code>: plain <code>HashMap</code>, <code>TreeMap</code>, counters, no locks</td><td>Only the matching thread touches it. Single writer.</td></tr>
+  <tr><td><code>CommandSlot</code>: plain fields written by the matching thread, read by the journal stage</td><td>The matching handler's sequence is released after it finishes the slot; the journal stage acquires it before reading. Happens-before by transitivity.</td></tr>
+  <tr><td><code>JournalHandler</code> built on the main thread, used on a stage thread</td><td>The Disruptor starts the stage thread later: <code>Thread.start()</code> is a happens-before edge.</td></tr>
+  <tr><td>The test's <code>Acks</code> handler shares order ids with producer threads</td><td>A <code>ConcurrentHashMap</code> and <code>synchronized</code> lists</td></tr>
+  <tr><td>S7 concurrency test: a planted bug skipped clearing a reused slot's event list</td><td>Caught: reused objects must be reset by their single owner</td></tr>
+</table></div>
+
+<h2 id="faq">10. Questions</h2>
+<h3>Is <code>volatile</code> enough for a counter?</h3>
+<p>No. <code>volatile</code> gives visibility and ordering, not atomicity: <code>count++</code> on a volatile is still read, add, write, and two threads can both read 5 and both write 6. Use an atomic, a lock, or one writer.</p>
+<h3>Why is double-checked locking broken without volatile?</h3>
+<p>The assignment <code>instance = new Thing()</code> can become visible before the constructor's writes, so another thread sees a non-null but half-initialised object. Making <code>instance</code> volatile adds the release/acquire pair that forbids it.</p>
+<h3>Why test on ARM as well as x86?</h3>
+<p>x86 is "strongly ordered" (only store-then-load can reorder), so racy code often works there by luck. ARM allows many more reorderings, so the same bug shows up. Apple Silicon laptops make this easy to hit.</p>
+
+<footer>Prayog learning pages &middot; Public sources: Java Language Specification chapter 17; JEP 193 (VarHandles); LMAX Disruptor technical paper. Related: <a href="ring-buffer.html">ring buffer</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const ops = { t1: [["w", "x"], ["r", "y", "r1"]], t2: [["w", "y"], ["r", "x", "r2"]] };
+  // All interleavings that keep each thread's own order: what a single shared memory could produce.
+  function interleavings() {
+    const out = [];
+    (function go(i, j, seq) {
+      if (i === 2 && j === 2) { out.push(seq); return; }
+      if (i < 2) go(i + 1, j, [...seq, ["T1", ops.t1[i]]]);
+      if (j < 2) go(i, j + 1, [...seq, ["T2", ops.t2[j]]]);
+    })(0, 0, []);
+    return out;
+  }
+  function run(seq) {
+    const mem = { x: 0, y: 0 }, regs = {};
+    for (const [, op] of seq) op[0] === "w" ? (mem[op[1]] = 1) : (regs[op[2]] = mem[op[1]]);
+    return `r1=${regs.r1}, r2=${regs.r2}`;
+  }
+  function render() {
+    const plain = document.getElementById("mode").value === "plain";
+    const results = new Map();
+    for (const s of interleavings()) {
+      const r = run(s), text = s.map(([t, o]) => `${t}:${o[0] === "w" ? o[1] + "=1" : o[2] + "=" + o[1]}`).join("  ");
+      if (!results.has(r)) results.set(r, text);
+    }
+    let lines = ["Outcome         Example order (each thread keeps its own order)"];
+    for (const [r, t] of results) lines.push(`${r.padEnd(15)} ${t}`);
+    lines.push("");
+    if (plain) lines.push("r1=0, r2=0      ALLOWED with plain fields. Both writes sit in store buffers while the reads run.",
+      "                No interleaving explains it: the hardware and the JIT may reorder each thread's write after its read.");
+    else lines.push("r1=0, r2=0      FORBIDDEN with volatile fields. Volatile accesses appear in one global order consistent",
+      "                with each thread's program order, so at least one read comes after the other thread's write.");
+    document.getElementById("litmusOut").textContent = lines.join("\n");
+  }
+  document.getElementById("mode").addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>

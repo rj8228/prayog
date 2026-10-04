@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBE Explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#form">2. A business example</a>
+  <a href="#how">3. How SBE works</a>
+  <a href="#try">4. Try it</a>
+  <a href="#evolve">5. Changing a schema safely</a>
+  <a href="#compare">6. SBE vs JSON vs Protobuf vs FIX</a>
+  <a href="#prayog">7. SBE in Prayog</a>
+  <a href="#faq">8. Questions</a>
+</nav>
+<main>
+<h1>SBE: Simple Binary Encoding</h1>
+<p class="lede">The binary message format of the FIX Trading Community, used where every microsecond counts: exchange order entry, market data feeds and journals. Prayog uses it for its journal. First the idea, then the bytes, then how Prayog uses it.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>Every order Prayog receives is written to disk before anyone is told about it. That means turning a Java object into bytes (<em>encoding</em>) and, on replay, bytes back into an object (<em>decoding</em>), millions of times a day. The format needs four properties:</p>
+<ul>
+  <li><strong>Fast:</strong> no text parsing, no searching for field names, no allocation on the hot path.</li>
+  <li><strong>Byte-stable:</strong> the same message must always give exactly the same bytes, because replay compares SHA-256 checksums of the bytes.</li>
+  <li><strong>Versioned:</strong> next year's code must still read this year's journal.</li>
+  <li><strong>Standard:</strong> something an engineer from any trading firm would recognise.</li>
+</ul>
+<p>Text formats like JSON fail the first two. SBE was designed for exactly this list.</p>
+
+<h2 id="form">2. A business example: the pre-printed form</h2>
+<p>Imagine two ways a bank branch could send account-opening requests to head office.</p>
+<ul>
+  <li><strong>A letter</strong> ("Dear Sir, please open an account for Mr. Rao, age 34..."). Flexible, but the clerk must read every word to find the age. That's JSON or FIX tag=value.</li>
+  <li><strong>A pre-printed form</strong> where box 3 is always the age and box 5 is always the branch code. The clerk's eyes jump straight to box 3. Nobody reads the rest. That's SBE.</li>
+</ul>
+<p>The form has one rule that matters later: <strong>you can add new boxes at the bottom, but never move or reuse an old one</strong>. Old clerks ignore the new boxes and keep working.</p>
+
+<h2 id="how">3. How SBE works</h2>
+<ol class="steps">
+  <li><strong>Write an XML schema</strong> listing messages, their fields and their types (<code>int64</code>, <code>uint8</code>, enums, strings).</li>
+  <li><strong>Generate code.</strong> <code>sbe-tool</code> turns the schema into Java classes, one encoder and one decoder per message, at build time.</li>
+  <li><strong>Encode in place.</strong> An encoder is a <em>flyweight</em>: a tiny reusable object that "wraps" a buffer at an offset and writes each field straight to its fixed position. No intermediate object, no garbage.</li>
+  <li><strong>Decode in place.</strong> A decoder wraps the bytes and reads a field only when asked, by jumping to its offset. Reading the price of an order never touches the symbol.</li>
+</ol>
+
+<h3>The layout of a message</h3>
+<svg viewBox="0 0 860 120" role="img" aria-label="An SBE message is an 8-byte header, then a fixed-size block of fields at fixed offsets, then repeating groups, then variable-length strings.">
+  <rect x="10" y="20" width="150" height="50" rx="6" style="fill:var(--f1);opacity:.35"/><text x="85" y="42" text-anchor="middle">Header (8 bytes)</text><text x="85" y="60" text-anchor="middle" class="small muted">length, id, schema, version</text>
+  <rect x="165" y="20" width="330" height="50" rx="6" style="fill:var(--f2);opacity:.3"/><text x="330" y="42" text-anchor="middle">Fixed block</text><text x="330" y="60" text-anchor="middle" class="small muted">every field at a known offset</text>
+  <rect x="500" y="20" width="150" height="50" rx="6" style="fill:var(--f3);opacity:.3"/><text x="575" y="42" text-anchor="middle">Repeating groups</text><text x="575" y="60" text-anchor="middle" class="small muted">count, then entries</text>
+  <rect x="655" y="20" width="195" height="50" rx="6" style="fill:var(--f5);opacity:.3"/><text x="752" y="42" text-anchor="middle">Variable data</text><text x="752" y="60" text-anchor="middle" class="small muted">length + bytes, in order</text>
+  <text x="430" y="100" text-anchor="middle" class="muted small">Fixed parts first, so their offsets never depend on how long a string is.</text>
+</svg>
+<ul>
+  <li><strong>Header:</strong> <code>blockLength</code> (size of the fixed block), <code>templateId</code> (which message this is), <code>schemaId</code> and <code>version</code>. The header makes every message self-describing.</li>
+  <li><strong>Fixed block:</strong> numbers and enums, each at a fixed offset. This is why decoding is a single memory read per field.</li>
+  <li><strong>Groups:</strong> a repeated block, such as the list of instruments in Prayog's setup record.</li>
+  <li><strong>Variable data:</strong> strings, as a length followed by the UTF-8 bytes. They come last and <strong>must be read in schema order</strong>, because each one starts where the previous one ended.</li>
+</ul>
+<div class="note">Byte order: Prayog's schema is little-endian, as SBE recommends. x86 and ARM are both little-endian, so encoding is a plain memory store with no byte swapping.</div>
+
+<h2 id="try">4. Try it: encode a NewOrder</h2>
+<p>This reproduces Prayog's real <code>NewOrder</code> layout from <code>journal-schema.xml</code>. Change a field and watch which bytes move. Notice that a longer client order id never shifts the price.</p>
+<div class="sim">
+  <div class="form-grid">
+    <label>accountId <input id="acc" value="7"></label>
+    <label>side <select id="side"><option value="0">BUY (0)</option><option value="1" selected>SELL (1)</option></select></label>
+    <label>orderType <select id="type"><option value="0" selected>LIMIT (0)</option><option value="1">MARKET (1)</option></select></label>
+    <label>price (paise) <input id="price" value="150000"></label>
+    <label>quantity <input id="qty" value="10"></label>
+    <label>clientOrderId <input id="cid" value="c1"></label>
+    <label>symbol <input id="sym" value="INFY"></label>
+  </div>
+  <div class="bytes" id="bytes" aria-live="polite"></div>
+  <div class="legend">
+    <span style="--c:var(--f1)">header</span><span style="--c:var(--f2)">accountId</span><span style="--c:var(--f3)">side, type</span>
+    <span style="--c:var(--f4)">price</span><span style="--c:var(--f5)">quantity</span><span style="--c:var(--f6)">strings (length + bytes)</span>
+  </div>
+  <p id="sizes" style="margin:12px 0 0"></p>
+  <div class="out" id="json"></div>
+</div>
+<p>With the default values, the bytes above are exactly the ones pinned by <code>JournalCodecTest.layoutIsPinned</code>.</p>
+
+<h2 id="evolve">5. Changing a schema safely</h2>
+<p>A journal written today must replay next year. SBE supports that with a few rules:</p>
+<div class="table-wrap"><table>
+  <tr><th>Change</th><th>Safe?</th><th>Why</th></tr>
+  <tr><td>Add a field at the end of the fixed block, bump the version</td><td class="good">Yes</td><td>Old decoders use <code>blockLength</code> from the header to skip what they don't know. New decoders see an old version and return a null value for the new field (<code>sinceVersion</code>).</td></tr>
+  <tr><td>Add a new message type</td><td class="good">Yes</td><td>New template id; old code never sees it in old journals.</td></tr>
+  <tr><td>Reorder or remove a field</td><td class="bad">No</td><td>Every later offset moves. Old bytes decode into the wrong fields.</td></tr>
+  <tr><td>Renumber an enum value</td><td class="bad">No</td><td>Old journals hold the old number. "SELL" would read as something else.</td></tr>
+  <tr><td>Reuse a template id</td><td class="bad">No</td><td>Old records would decode as the new message.</td></tr>
+</table></div>
+<p>This is why Prayog's schema numbers its enum values explicitly instead of trusting the Java enum's order. If someone reorders <code>RejectReason</code> in Java, the bytes don't change.</p>
+
+<h2 id="compare">6. SBE vs JSON vs Protobuf vs FIX tag=value</h2>
+<div class="table-wrap"><table>
+  <tr><th></th><th>JSON</th><th>Protobuf</th><th>FIX tag=value</th><th>SBE</th></tr>
+  <tr><td>Form</td><td>Text, named keys</td><td>Binary, tag + varint</td><td>Text, <code>tag=value</code> pairs</td><td>Binary, fixed offsets</td></tr>
+  <tr><td>Read one field</td><td>Parse everything</td><td>Scan tags</td><td>Scan tags</td><td>One memory read</td></tr>
+  <tr><td>Allocation</td><td>Many objects</td><td>A message object</td><td>Strings</td><td>None (flyweights)</td></tr>
+  <tr><td>Same message, same bytes</td><td>Not guaranteed</td><td>Not guaranteed across versions</td><td>Field order can vary</td><td>Yes</td></tr>
+  <tr><td>Human readable</td><td>Yes</td><td>No</td><td>Mostly</td><td>No</td></tr>
+  <tr><td>Typical use</td><td>Web APIs, Kafka in Prayog</td><td>Microservices (gRPC)</td><td>Broker and exchange connectivity</td><td>Exchange order entry, market data, journals</td></tr>
+</table></div>
+<p>SBE is not a replacement for FIX; it is one of FIX's <em>encodings</em>. The same FIX business messages (NewOrderSingle, ExecutionReport) can be carried as text or as SBE. See <a href="fix-protocol.html">the FIX page</a>. For example, CME Group publishes its market data (MDP 3.0) and its iLink 3 order entry in SBE, and the Aeron messaging library uses SBE for its own protocols.</p>
+
+<h2 id="prayog">7. SBE in Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th>What</th></tr>
+  <tr><td><code>exchange-core/src/main/resources/sbe/journal-schema.xml</code></td><td>6 commands (ids 1 to 6), 7 events (ids 20 to 26), the engine setup (id 40)</td></tr>
+  <tr><td><code>exchange-core/pom.xml</code></td><td><code>exec-maven-plugin</code> runs <code>sbe-tool</code> during <code>generate-sources</code>; output lands in <code>target/generated-sources/sbe</code></td></tr>
+  <tr><td><code>journal/JournalCodec.java</code></td><td>Maps records (<code>NewOrder</code>, <code>Trade</code>...) to the generated flyweights and back</td></tr>
+  <tr><td><code>JournalCodecTest</code></td><td>Round-trip properties for every message, the pinned bytes, enum coverage</td></tr>
+  <tr><td>Parent <code>pom.xml</code></td><td><code>--add-exports java.base/jdk.internal.misc=ALL-UNNAMED</code> for tests, because SBE's runtime (Agrona) uses the JDK's internal Unsafe. See <a href="java-off-heap.html">off-heap memory</a>.</td></tr>
+</table></div>
+<p>Prayog's codec still builds a Java record per decoded message, so it is not fully garbage-free. The flyweights make that possible later if the S9 benchmarks show it matters.</p>
+
+<h2 id="faq">8. Questions</h2>
+<h3>Why must strings be read in order?</h3>
+<p>A string's position depends on the length of every string before it. The decoder keeps a running "limit" that advances as each one is read. Read the symbol before the client order id and you are reading the client order id's bytes as the symbol. One of S8's planted bugs did exactly this, and the round-trip test caught it.</p>
+<h3>If SBE is so fast, why does Kafka use JSON in Prayog?</h3>
+<p>Kafka carries events to other services (post-trade, leaderboard) written in other languages, where readability and JSON Schema validation matter more than microseconds. The journal is private to the engine and on the critical path. Different jobs, different formats.</p>
+<h3>What does "zero-copy" mean here?</h3>
+<p>The decoder reads fields directly out of the buffer the bytes arrived in (or the memory-mapped journal file). Nothing is copied into an intermediate object first.</p>
+
+<footer>Prayog learning pages &middot; S8 &middot; Public sources: FIX Trading Community SBE specification; the Real Logic simple-binary-encoding project.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const enc = new TextEncoder();
+  const hex = b => b.toString(16).padStart(2, "0");
+  function bigint(v) { try { return BigInt(v.trim() || "0"); } catch { return null; } }
+  function render() {
+    const acc = bigint($("acc").value), price = bigint($("price").value), qty = bigint($("qty").value);
+    const cid = enc.encode($("cid").value), sym = enc.encode($("sym").value);
+    if (acc === null || price === null || qty === null) { $("bytes").textContent = "Numbers only, please."; return; }
+    const total = 8 + 26 + 4 + cid.length + 4 + sym.length;
+    const buf = new ArrayBuffer(total), dv = new DataView(buf), parts = [];
+    let o = 0;
+    const mark = (len, color, label) => { parts.push({ from: o, len, color, label }); o += len; };
+    dv.setUint16(0, 26, true); dv.setUint16(2, 1, true); dv.setUint16(4, 1, true); dv.setUint16(6, 0, true); mark(8, "--f1", "header");
+    dv.setBigInt64(o, BigInt.asIntN(64, acc), true); mark(8, "--f2", "accountId");
+    dv.setUint8(o, +$("side").value); mark(1, "--f3", "side");
+    dv.setUint8(o, +$("type").value); mark(1, "--f3", "orderType");
+    dv.setBigInt64(o, BigInt.asIntN(64, price), true); mark(8, "--f4", "price");
+    dv.setBigInt64(o, BigInt.asIntN(64, qty), true); mark(8, "--f5", "quantity");
+    dv.setUint32(o, cid.length, true); mark(4, "--f6", "clientOrderId length");
+    new Uint8Array(buf, o, cid.length).set(cid); mark(cid.length, "--f6", "clientOrderId");
+    dv.setUint32(o, sym.length, true); mark(4, "--f6", "symbol length");
+    new Uint8Array(buf, o, sym.length).set(sym); mark(sym.length, "--f6", "symbol");
+    const bytes = new Uint8Array(buf), box = $("bytes");
+    box.textContent = "";
+    for (const p of parts) for (let i = p.from; i < p.from + p.len; i++) {
+      const s = document.createElement("span");
+      s.style.setProperty("--c", `var(${p.color})`);
+      s.title = `${p.label}, byte ${i}`;
+      s.textContent = hex(bytes[i]);
+      box.appendChild(s);
+    }
+    const json = JSON.stringify({ type: "NewOrder", clientOrderId: $("cid").value, accountId: Number(acc), symbol: $("sym").value,
+      side: $("side").value === "0" ? "BUY" : "SELL", orderType: $("type").value === "0" ? "LIMIT" : "MARKET", price: Number(price), quantity: Number(qty) });
+    $("sizes").innerHTML = `SBE: <strong>${total} bytes</strong>, price always at byte 18. The same order as JSON: <strong>${enc.encode(json).length} bytes</strong>, and the price is wherever the text puts it.`;
+    $("json").textContent = json;
+  }
+  for (const id of ["acc", "side", "type", "price", "qty", "cid", "sym"]) $(id).addEventListener("input", render);
+  render();
+})();
+</script>
+</body>
+</html>

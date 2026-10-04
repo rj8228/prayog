@@ -8,6 +8,21 @@ What I learned building Prayog, session by session: the functional side (how exc
 
 The longer background reading lives in [`docs/overview/functional.html`](../overview/functional.html), [`docs/overview/technical.html`](../overview/technical.html) and [`docs/overview/ring-buffer.html`](../overview/ring-buffer.html) (with an interactive simulator). The decisions themselves live in [`docs/adr/`](../adr/).
 
+## Topic pages
+
+Interactive explainers in [`docs/overview/`](../overview/), each with a business example, the mechanics, a try-it panel and how Prayog uses it. Open with `open docs/overview/<name>.html`.
+
+| Area | Page | Covers |
+|---|---|---|
+| Trading infrastructure | [ring-buffer.html](../overview/ring-buffer.html) | LMAX Disruptor, single writer, back-pressure (S7) |
+| Trading infrastructure | [sbe.html](../overview/sbe.html) | Simple Binary Encoding: layout, flyweights, schema evolution, live encoder (S8) |
+| Trading infrastructure | [fix-protocol.html](../overview/fix-protocol.html) | FIX tag=value, order lifecycle, ExecutionReport, session layer and resend, message builder and parser |
+| Trading infrastructure | [journaling.html](../overview/journaling.html) | fsync, write-ahead journal, group commit, torn writes, CRC32C, segments, replay, crash simulator (S8) |
+| Core Java | [java-memory-model.html](../overview/java-memory-model.html) | Happens-before, volatile, release/acquire, CAS, cache lines, false sharing, litmus test |
+| Core Java | [java-off-heap.html](../overview/java-off-heap.html) | Heap vs direct vs mapped buffers, Unsafe, VarHandle, FFM API, Agrona, `--add-exports`, endianness |
+| Core Java | [java-gc-jit.html](../overview/java-gc-jit.html) | Allocation, collectors (G1, ZGC), garbage-free code, JIT tiers, warm-up, safepoints, JMH, coordinated omission |
+| Core Java | [modern-java.html](../overview/modern-java.html) | Records, sealed types, pattern-matching switch and exhaustiveness, virtual threads |
+
 ## Index
 
 | Session | File | Main topics |

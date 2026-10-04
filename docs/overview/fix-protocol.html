@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIX Protocol Explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#what">1. What FIX is</a>
+  <a href="#phone">2. A business example</a>
+  <a href="#message">3. Anatomy of a message</a>
+  <a href="#build">4. Build a message</a>
+  <a href="#flow">5. An order's life in FIX</a>
+  <a href="#session">6. The session layer</a>
+  <a href="#family">7. The FIX family</a>
+  <a href="#prayog">8. FIX and Prayog</a>
+  <a href="#parse">9. Parse a message</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>FIX: the language of electronic trading</h1>
+<p class="lede">The Financial Information eXchange protocol is how brokers, funds, banks and exchanges have sent orders and fills to each other since the 1990s. If you work anywhere near trading systems, you will read FIX messages. This page covers the message format, the order lifecycle, the session layer that makes it reliable, and how it relates to SBE and to Prayog's own commands.</p>
+
+<h2 id="what">1. What FIX is</h2>
+<p>FIX is an open standard run by the FIX Trading Community. It defines two things:</p>
+<ul>
+  <li><strong>Business messages</strong> with agreed meanings: "new order" (<code>NewOrderSingle</code>), "cancel this" (<code>OrderCancelRequest</code>), "here's what happened to your order" (<code>ExecutionReport</code>), plus market data, allocations and more.</li>
+  <li><strong>A session protocol</strong> that delivers those messages exactly once and in order over an unreliable connection: logon, heartbeats, sequence numbers and resending gaps.</li>
+</ul>
+<p>Before FIX, every broker had its own format, often over the phone. FIX let one buy-side system talk to dozens of brokers with one vocabulary.</p>
+
+<h2 id="phone">2. A business example: a numbered phone order line</h2>
+<p>A fund manager phones a broker. Both sides keep a numbered notebook:</p>
+<ul>
+  <li>"Message 41: buy 100 INFY at 1,500, my reference A-17." The broker writes it down as message 41.</li>
+  <li>If the broker's last entry was 39, they say: "I'm missing 40, please repeat it." That's a <strong>ResendRequest</strong>.</li>
+  <li>Every few seconds of silence: "Still there?" "Yes." Those are <strong>Heartbeats</strong> and <strong>TestRequests</strong>.</li>
+  <li>The broker calls back: "A-17: filled 60 at 1,500, 40 still working." That's an <strong>ExecutionReport</strong>.</li>
+</ul>
+<p>FIX is that notebook discipline, made machine-readable.</p>
+
+<h2 id="message">3. Anatomy of a message</h2>
+<p>Classic FIX ("tag=value") is text: a list of <code>tag=value</code> fields separated by the SOH control character (byte 1, shown here as <code>|</code>). Each tag is a number with an agreed meaning.</p>
+<pre><code>8=FIX.4.4|9=126|35=D|34=41|49=FUND1|52=20261005-04:00:00.000|56=BROKER|11=A-17|21=1|55=INFY|54=1|60=20261005-04:00:00.000|38=100|40=2|44=1500|10=131|</code></pre>
+<div class="table-wrap"><table>
+  <tr><th>Part</th><th>Tags</th><th>Meaning</th></tr>
+  <tr><td>Header</td><td><code>8</code> BeginString, <code>9</code> BodyLength, <code>35</code> MsgType, <code>49</code>/<code>56</code> sender and target, <code>34</code> MsgSeqNum, <code>52</code> SendingTime</td><td>Who, to whom, which message number, what kind. <code>8</code>, <code>9</code> and <code>35</code> must come first, in that order.</td></tr>
+  <tr><td>Body</td><td><code>11</code> ClOrdID, <code>55</code> Symbol, <code>54</code> Side (1 buy, 2 sell), <code>38</code> OrderQty, <code>40</code> OrdType (1 market, 2 limit), <code>44</code> Price</td><td>The business content</td></tr>
+  <tr><td>Trailer</td><td><code>10</code> CheckSum</td><td>Sum of every byte before <code>10=</code>, modulo 256, as three digits</td></tr>
+</table></div>
+<p><strong>BodyLength (9)</strong> counts the bytes from just after the <code>9=...|</code> field up to and including the <code>|</code> before <code>10=</code>. With it, a reader knows exactly where the message ends without scanning for the trailer.</p>
+<div class="table-wrap"><table>
+  <tr><th>MsgType (35)</th><th>Name</th><th>Direction</th></tr>
+  <tr><td><code>D</code></td><td>NewOrderSingle</td><td>client &rarr; exchange</td></tr>
+  <tr><td><code>F</code></td><td>OrderCancelRequest</td><td>client &rarr; exchange</td></tr>
+  <tr><td><code>G</code></td><td>OrderCancelReplaceRequest (modify)</td><td>client &rarr; exchange</td></tr>
+  <tr><td><code>8</code></td><td>ExecutionReport</td><td>exchange &rarr; client</td></tr>
+  <tr><td><code>9</code></td><td>OrderCancelReject</td><td>exchange &rarr; client</td></tr>
+  <tr><td><code>A</code>, <code>0</code>, <code>1</code>, <code>2</code>, <code>4</code>, <code>5</code></td><td>Logon, Heartbeat, TestRequest, ResendRequest, SequenceReset, Logout</td><td>session layer, both ways</td></tr>
+</table></div>
+
+<h2 id="build">4. Build a message</h2>
+<p>Fill in a NewOrderSingle. The BodyLength and CheckSum are computed the way a FIX engine would.</p>
+<div class="sim">
+  <div class="form-grid">
+    <label>SenderCompID (49) <input id="b49" value="FUND1"></label>
+    <label>TargetCompID (56) <input id="b56" value="BROKER"></label>
+    <label>MsgSeqNum (34) <input id="b34" value="41"></label>
+    <label>ClOrdID (11) <input id="b11" value="A-17"></label>
+    <label>Symbol (55) <input id="b55" value="INFY"></label>
+    <label>Side (54) <select id="b54"><option value="1">1 = Buy</option><option value="2">2 = Sell</option></select></label>
+    <label>OrderQty (38) <input id="b38" value="100"></label>
+    <label>OrdType (40) <select id="b40"><option value="2">2 = Limit</option><option value="1">1 = Market</option></select></label>
+    <label>Price (44) <input id="b44" value="1500"></label>
+  </div>
+  <div class="out" id="built"></div>
+  <p id="builtInfo" style="margin:10px 0 0"></p>
+</div>
+
+<h2 id="flow">5. An order's life in FIX</h2>
+<p>Every reply to an order is an <code>ExecutionReport</code> (35=8). Its <code>ExecType</code> (150) says what just happened; <code>OrdStatus</code> (39) says where the order stands now.</p>
+<svg viewBox="0 0 860 330" role="img" aria-label="Sequence: client sends NewOrderSingle; exchange replies ExecutionReport New; later a partial fill and a fill; client sends cancel for remaining; exchange replies Canceled.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <text x="140" y="20" text-anchor="middle">Client (broker / bot)</text><text x="720" y="20" text-anchor="middle">Exchange</text>
+  <line x1="140" y1="30" x2="140" y2="320" class="line" style="stroke-dasharray:4 4"/><line x1="720" y1="30" x2="720" y2="320" class="line" style="stroke-dasharray:4 4"/>
+  <line x1="140" y1="55" x2="716" y2="55" class="line" marker-end="url(#a)"/><text x="430" y="48" text-anchor="middle">35=D NewOrderSingle, ClOrdID A-17, buy 100 @ 1500</text>
+  <line x1="720" y1="95" x2="144" y2="95" class="line" marker-end="url(#a)"/><text x="430" y="88" text-anchor="middle">35=8 ExecType 0 New, OrderID 9001, OrdStatus New</text>
+  <line x1="720" y1="140" x2="144" y2="140" class="line" marker-end="url(#a)"/><text x="430" y="133" text-anchor="middle">35=8 ExecType F Trade, LastQty 60, LastPx 1500, CumQty 60, LeavesQty 40</text>
+  <line x1="140" y1="190" x2="716" y2="190" class="line" marker-end="url(#a)"/><text x="430" y="183" text-anchor="middle">35=F OrderCancelRequest, ClOrdID A-18, OrigClOrdID A-17</text>
+  <line x1="720" y1="235" x2="144" y2="235" class="line" marker-end="url(#a)"/><text x="430" y="228" text-anchor="middle">35=8 ExecType 4 Canceled, CumQty 60, LeavesQty 0</text>
+  <text x="430" y="290" text-anchor="middle" class="muted small">Every request gets a new ClOrdID; OrigClOrdID points at the order being changed.</text>
+</svg>
+<div class="table-wrap"><table>
+  <tr><th>ExecType (150)</th><th>Meaning</th><th>Prayog event</th></tr>
+  <tr><td><code>0</code> New</td><td>Order accepted and working</td><td><code>OrderAccepted</code></td></tr>
+  <tr><td><code>F</code> Trade</td><td>A (partial) fill</td><td><code>Trade</code></td></tr>
+  <tr><td><code>4</code> Canceled</td><td>Open quantity removed</td><td><code>OrderCancelled</code></td></tr>
+  <tr><td><code>5</code> Replaced</td><td>Modify accepted</td><td><code>OrderModified</code></td></tr>
+  <tr><td><code>8</code> Rejected</td><td>Order refused</td><td><code>OrderRejected</code></td></tr>
+  <tr><td><code>C</code> Expired</td><td>Day order ended at the close</td><td><code>OrderCancelled</code> with reason <code>EXPIRED</code></td></tr>
+</table></div>
+<p>Three quantities always add up: <code>OrderQty = CumQty + LeavesQty</code> while the order is alive (filled so far + still open). Prayog's <code>OrderModified.leavesQuantity</code> is the same idea.</p>
+
+<h2 id="session">6. The session layer: exactly once, in order</h2>
+<p>TCP already delivers bytes in order, so why sequence numbers? Because connections <em>drop</em>, and when you reconnect TCP has forgotten everything. FIX sessions outlive connections:</p>
+<ol class="steps">
+  <li><strong>Logon (35=A)</strong> with a heartbeat interval (<code>108</code>). Each side states its next sequence number.</li>
+  <li>Every message carries <code>MsgSeqNum</code> (34), one higher than the last, per direction, for the whole trading day.</li>
+  <li><strong>Gap detected</strong> (expected 40, got 42): send <strong>ResendRequest (35=2)</strong> with <code>BeginSeqNo</code>=40, <code>EndSeqNo</code>=41.</li>
+  <li>The other side resends 40 and 41 with <code>PossDupFlag</code> (43)=Y, so the receiver can drop copies it already has. Session-level messages that are not worth resending (old heartbeats) are skipped with <strong>SequenceReset-GapFill (35=4, 123=Y)</strong>.</li>
+  <li><strong>Heartbeat (35=0)</strong> when idle; <strong>TestRequest (35=1)</strong> if the other side goes quiet. No answer means the link is dead.</li>
+</ol>
+<div class="note">This is the same idea as Prayog's input sequence and journal: number everything, store it, and anything can be recovered by replaying from a number. A FIX engine must <em>persist</em> its outgoing messages so it can resend them after a crash, which makes it a journal too.</div>
+
+<h2 id="family">7. The FIX family</h2>
+<div class="table-wrap"><table>
+  <tr><th>Layer</th><th>Standard</th><th>What it is</th></tr>
+  <tr><td>Business messages</td><td>FIX application messages (4.2, 4.4, 5.0 SP2)</td><td>NewOrderSingle, ExecutionReport... the vocabulary</td></tr>
+  <tr><td>Encoding</td><td>tag=value</td><td>The classic text form shown above</td></tr>
+  <tr><td>Encoding</td><td><a href="sbe.html">SBE</a></td><td>Fixed-layout binary, for low latency</td></tr>
+  <tr><td>Encoding</td><td>FAST</td><td>Compressed, mostly for older market data feeds</td></tr>
+  <tr><td>Session</td><td>FIX session (FIXT 1.1)</td><td>Logon, sequence numbers, resend, over TCP</td></tr>
+  <tr><td>Session</td><td>FIXP</td><td>A lighter session protocol designed for binary encodings like SBE</td></tr>
+</table></div>
+<p>Low-latency venues usually offer a binary order-entry protocol next to (or instead of) text FIX, because parsing text costs microseconds. CME's iLink 3, for example, is SBE over FIXP. Many venues design their own binary protocols; the concepts (client order ids, execution reports, sequence numbers, resend) stay the same.</p>
+
+<h2 id="prayog">8. FIX and Prayog</h2>
+<p>Prayog does not speak FIX on the wire; its gateway (S10) will use JSON over HTTP and WebSocket so bots in any language are easy to write. But its commands and events follow FIX's model, so the mapping is direct:</p>
+<div class="table-wrap"><table>
+  <tr><th>FIX</th><th>Prayog</th></tr>
+  <tr><td>NewOrderSingle (D): ClOrdID, Symbol, Side, OrdType, OrderQty, Price</td><td><code>NewOrder(clientOrderId, accountId, symbol, side, type, price, quantity)</code></td></tr>
+  <tr><td>OrderCancelRequest (F)</td><td><code>CancelOrder</code> (by exchange order id rather than OrigClOrdID)</td></tr>
+  <tr><td>OrderCancelReplaceRequest (G): OrderQty is the new <em>total</em></td><td><code>ModifyOrder</code>: quantity is the new total, as in FIX (ADR 0004)</td></tr>
+  <tr><td>ExecutionReport (8)</td><td><code>OrderAccepted</code>, <code>Trade</code>, <code>OrderCancelled</code>, <code>OrderModified</code>, <code>OrderRejected</code></td></tr>
+  <tr><td>MsgSeqNum + resend</td><td>Input sequence and event seq; the journal makes any range recoverable</td></tr>
+  <tr><td>Price as decimal text</td><td>Price as integer paise. Never a float.</td></tr>
+</table></div>
+
+<h2 id="parse">9. Parse a message</h2>
+<p>Paste any tag=value message (with <code>|</code> or real SOH separators). The parser names common tags and checks BodyLength and CheckSum. The sample is a partial fill whose checksum is deliberately wrong (the real value is 038); press "Fix" to recompute it, or edit a field and watch both checks fail.</p>
+<div class="sim">
+  <textarea id="raw" aria-label="FIX message">8=FIX.4.4|9=136|35=8|34=88|49=BROKER|52=20261005-04:00:01.250|56=FUND1|6=1500|11=A-17|14=60|17=E-2|31=1500|32=60|37=9001|39=1|54=1|55=INFY|150=F|151=40|10=000|</textarea>
+  <div class="controls" style="margin-top:8px"><button class="primary" id="parseBtn">Parse</button><button id="fixBtn">Fix BodyLength and CheckSum</button></div>
+  <div id="parsed"></div>
+</div>
+
+<h2 id="faq">10. Questions</h2>
+<h3>Why does every request need a new ClOrdID?</h3>
+<p>So every message is uniquely identifiable and replies can be matched to requests. A cancel has its own ClOrdID, and <code>OrigClOrdID</code> says which order it targets. Prayog rejects a reused client order id (<code>DUPLICATE_CLIENT_ORDER_ID</code>) for the same reason.</p>
+<h3>Why is the checksum so weak?</h3>
+<p>A sum of bytes modulo 256 catches truncation and framing mistakes, not deliberate tampering or every bit flip; TCP and TLS handle those. Prayog's journal uses CRC32C, which is much stronger, because it guards against torn disk writes.</p>
+<h3>Is FIX used for market data too?</h3>
+<p>Yes (MarketDataSnapshot, MarketDataIncrementalRefresh), but high-volume feeds are usually binary and multicast, such as SBE over UDP, because one text message per book change is too slow.</p>
+
+<footer>Prayog learning pages &middot; Public sources: FIX Trading Community specifications (FIX 4.4, FIXT 1.1, SBE, FIXP).</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const SOH = "\x01";
+  const NAMES = { 6: "AvgPx", 7: "BeginSeqNo", 8: "BeginString", 9: "BodyLength", 10: "CheckSum", 11: "ClOrdID", 14: "CumQty", 16: "EndSeqNo",
+    17: "ExecID", 21: "HandlInst", 31: "LastPx", 32: "LastQty", 34: "MsgSeqNum", 35: "MsgType", 36: "NewSeqNo", 37: "OrderID", 38: "OrderQty", 39: "OrdStatus",
+    40: "OrdType", 41: "OrigClOrdID", 43: "PossDupFlag", 44: "Price", 49: "SenderCompID", 52: "SendingTime", 54: "Side", 55: "Symbol", 56: "TargetCompID",
+    58: "Text", 60: "TransactTime", 98: "EncryptMethod", 108: "HeartBtInt", 112: "TestReqID", 123: "GapFillFlag", 150: "ExecType", 151: "LeavesQty" };
+  const VALUES = { 35: { D: "NewOrderSingle", F: "OrderCancelRequest", G: "OrderCancelReplaceRequest", 8: "ExecutionReport", 9: "OrderCancelReject",
+      A: "Logon", 0: "Heartbeat", 1: "TestRequest", 2: "ResendRequest", 3: "Reject", 4: "SequenceReset", 5: "Logout" },
+    54: { 1: "Buy", 2: "Sell" }, 40: { 1: "Market", 2: "Limit" },
+    150: { 0: "New", 4: "Canceled", 5: "Replaced", 8: "Rejected", C: "Expired", F: "Trade" },
+    39: { 0: "New", 1: "PartiallyFilled", 2: "Filled", 4: "Canceled", 8: "Rejected", C: "Expired" } };
+  const sum = s => { let t = 0; for (const b of new TextEncoder().encode(s)) t += b; return t % 256; };
+  const len = s => new TextEncoder().encode(s).length;
+
+  // Wraps body fields with 8, 9 and 10, computed as a FIX engine would.
+  function frame(begin, fields) {
+    const body = fields.map(([t, v]) => `${t}=${v}${SOH}`).join("");
+    const head = `8=${begin}${SOH}9=${len(body)}${SOH}`;
+    const cs = String(sum(head + body)).padStart(3, "0");
+    return head + body + `10=${cs}${SOH}`;
+  }
+  const show = m => m.replaceAll(SOH, "|");
+  function stamp() { const d = new Date(); const p = (n, w = 2) => String(n).padStart(w, "0");
+    return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${p(d.getUTCMilliseconds(), 3)}`; }
+  const now = stamp();
+
+  function build() {
+    const f = [["35", "D"], ["34", $("b34").value], ["49", $("b49").value], ["52", now], ["56", $("b56").value],
+      ["11", $("b11").value], ["21", "1"], ["55", $("b55").value], ["54", $("b54").value], ["60", now], ["38", $("b38").value], ["40", $("b40").value]];
+    if ($("b40").value === "2") f.push(["44", $("b44").value]);
+    const msg = frame("FIX.4.4", f);
+    const body = msg.slice(msg.indexOf(SOH, msg.indexOf("9=")) + 1, msg.lastIndexOf("10="));
+    $("built").textContent = show(msg);
+    $("builtInfo").innerHTML = `BodyLength (9) = <strong>${len(body)}</strong> bytes. CheckSum (10) = <strong>${msg.match(/10=(\d{3})/)[1]}</strong>. Total ${len(msg)} bytes. Compare: the same order in <a href="sbe.html#try">SBE</a> is about 50 bytes with no parsing.`;
+  }
+  ["b49", "b56", "b34", "b11", "b55", "b54", "b38", "b40", "b44"].forEach(id => $(id).addEventListener("input", build));
+  build();
+
+  function split(raw) {
+    const text = raw.trim().replaceAll("|", SOH);
+    return text.split(SOH).filter(Boolean).map(p => { const i = p.indexOf("="); return [p.slice(0, i), p.slice(i + 1)]; });
+  }
+  function parse() {
+    const fields = split($("raw").value), out = $("parsed");
+    out.textContent = "";
+    if (!fields.length || fields[0][0] !== "8" || fields[1]?.[0] !== "9" || fields[2]?.[0] !== "35") {
+      out.innerHTML = `<p class="bad">A FIX message must start with 8, 9, 35 in that order.</p>`; return;
+    }
+    const text = fields.map(([t, v]) => `${t}=${v}${SOH}`).join("");
+    const checkAt = text.lastIndexOf("10=");
+    const bodyStart = text.indexOf(SOH, text.indexOf("9=")) + 1;
+    const realLen = len(text.slice(bodyStart, checkAt)), realSum = String(sum(text.slice(0, checkAt))).padStart(3, "0");
+    const claimedLen = fields[1][1], claimedSum = checkAt >= 0 ? text.slice(checkAt + 3, checkAt + 6) : "(none)";
+    const rows = fields.map(([t, v]) => `<tr><td><code>${t}</code></td><td>${NAMES[t] || "?"}</td><td><code>${v.replace(/</g, "&lt;")}</code></td><td>${VALUES[t]?.[v] || ""}</td></tr>`).join("");
+    out.innerHTML = `<p>BodyLength: claimed ${claimedLen}, actual ${realLen} ${+claimedLen === realLen ? '<span class="good">OK</span>' : '<span class="bad">wrong</span>'}<br>
+      CheckSum: claimed ${claimedSum}, actual ${realSum} ${claimedSum === realSum ? '<span class="good">OK</span>' : '<span class="bad">wrong</span>'}</p>
+      <div class="table-wrap"><table><tr><th>Tag</th><th>Name</th><th>Value</th><th>Meaning</th></tr>${rows}</table></div>`;
+  }
+  function fixUp() {
+    const fields = split($("raw").value);
+    const body = fields.filter(([t]) => !["8", "9", "10"].includes(t));
+    $("raw").value = show(frame(fields[0]?.[0] === "8" ? fields[0][1] : "FIX.4.4", body));
+    parse();
+  }
+  $("parseBtn").addEventListener("click", parse);
+  $("fixBtn").addEventListener("click", fixUp);
+  parse();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modern Java Features</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 12px; font-size: 14px; }
+  .checks label { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#forms">2. A business example</a>
+  <a href="#records">3. Records</a>
+  <a href="#sealed">4. Sealed types</a>
+  <a href="#switch">5. Pattern matching</a>
+  <a href="#try">6. Try it</a>
+  <a href="#vthreads">7. Virtual threads</a>
+  <a href="#more">8. Smaller features</a>
+  <a href="#prayog">9. In Prayog</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>Modern Java: records, sealed types, pattern matching</h1>
+<p class="lede">Java 16 to 21 changed how domain models are written. Prayog's commands and events are built on three features that work together: records for data, sealed interfaces for a closed set of types, and pattern-matching <code>switch</code> that the compiler checks for completeness. Plus where virtual threads fit, and where they don't.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>An exchange has a fixed vocabulary: new order, cancel, modify, clock tick, session change, account switch. Every part of the system (engine, codec, gateway, replay) must handle <em>every</em> one. The danger is adding a seventh command and forgetting one of the places that handles them. Older Java had clumsy answers: long <code>instanceof</code> chains, the visitor pattern, or a "type" enum plus casting. All of them fail silently or at run time when a case is forgotten.</p>
+
+<h2 id="forms">2. A business example: the bank's request forms</h2>
+<p>A bank branch accepts exactly three forms: deposit, withdrawal, transfer. Each form has fixed boxes (a record). The list of forms is printed on the wall and nobody may invent a fourth at the counter (sealed). Every department has a checklist with one line per form, and the auditor refuses any checklist missing a line (exhaustive switch). When head office adds a "standing order" form, every department's checklist is flagged until it's updated.</p>
+
+<h2 id="records">3. Records (Java 16)</h2>
+<pre><code>public record NewOrder(String clientOrderId, long accountId, String symbol,
+                       Side side, OrderType type, long price, long quantity) implements Command {
+    public NewOrder {                       // compact constructor: validate, then fields are set
+        Objects.requireNonNull(symbol, "symbol");
+    }
+}</code></pre>
+<ul>
+  <li><strong>You get:</strong> private final fields, a constructor, accessors (<code>symbol()</code>), and value-based <code>equals</code>, <code>hashCode</code> and <code>toString</code>. Two orders with the same fields are equal, which makes tests like "replayed command equals original" one line.</li>
+  <li><strong>Compact constructor:</strong> the place for validation. Prayog's <code>Instrument</code> refuses a band that contains no valid price.</li>
+  <li><strong>Shallowly immutable:</strong> the fields can't be reassigned, but a <code>List</code> field could still be changed by whoever passed it in. Copy it: <code>EngineSetup</code> does <code>instruments = List.copyOf(instruments)</code>.</li>
+  <li><strong>Not for everything:</strong> records can't extend classes and have no mutable state, so mutable things (an order resting in the book, whose leaves quantity shrinks) stay ordinary classes, like Prayog's <code>RestingOrder</code>.</li>
+</ul>
+
+<h2 id="sealed">4. Sealed interfaces (Java 17)</h2>
+<pre><code>public sealed interface Command
+        permits NewOrder, CancelOrder, ModifyOrder, ClockTick, SetSessionState, SetAccountEnabled {}</code></pre>
+<p>Only the listed types may implement <code>Command</code>. The compiler now <em>knows</em> the complete list, which unlocks the next feature. Permitted subclasses must be <code>final</code> (records are), <code>sealed</code> themselves, or explicitly <code>non-sealed</code>.</p>
+
+<h2 id="switch">5. Pattern matching for switch (Java 21)</h2>
+<pre><code>int length = switch (command) {
+    case NewOrder c    -&gt; encodeNewOrder(c);
+    case CancelOrder c -&gt; encodeCancel(c);
+    case ClockTick c   -&gt; encodeTick(c);
+    // ... every permitted type, and no default
+};</code></pre>
+<ul>
+  <li><strong>Type patterns</strong> test and bind in one step: no cast.</li>
+  <li><strong>Exhaustiveness:</strong> over a sealed type, a switch <em>expression</em> without <code>default</code> must cover every permitted type or it doesn't compile. Add a seventh command and every such switch in the codebase becomes a compile error, pointing at exactly the places to update. That's the bank auditor.</li>
+  <li><strong>Record patterns</strong> destructure: <code>case ClockTick(long t) -&gt; ...</code>.</li>
+  <li><strong>Guards:</strong> <code>case NewOrder o when o.quantity() &lt;= 0 -&gt; reject(...)</code>.</li>
+  <li><strong>Null:</strong> a pattern switch throws <code>NullPointerException</code> on null unless there's an explicit <code>case null</code>.</li>
+</ul>
+<div class="warn"><strong>Don't add <code>default</code> to a switch over a sealed type.</strong> It compiles forever, silently routing a new type into the default branch. You lose the very check you wanted.</div>
+
+<h2 id="try">6. Try it: the compiler's exhaustiveness check</h2>
+<p>Tick the cases written in a <code>switch</code> over Prayog's <code>ExchangeEvent</code>, then add a new event type to the sealed interface and see what the compiler says.</p>
+<div class="sim">
+  <div class="zone" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Cases written in the switch</div>
+  <div class="checks" id="cases"></div>
+  <div class="controls">
+    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--fg)"><input type="checkbox" id="dflt"> a <code>default</code> branch</label>
+    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--fg)"><input type="checkbox" id="newType"> add <code>OrderExpired</code> to <code>permits</code></label>
+  </div>
+  <div class="out" id="javac"></div>
+</div>
+
+<h2 id="vthreads">7. Virtual threads (Java 21)</h2>
+<p>A platform thread is an operating-system thread: about 1 MB of stack and an expensive context switch, so servers keep a pool of a few hundred. A virtual thread is scheduled by the JVM onto a few carrier threads. When it blocks on I/O, the JVM parks it and runs another, so a million of them is fine.</p>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th>Virtual threads?</th><th>Why</th></tr>
+  <tr><td>Gateway: thousands of bot connections waiting on the network</td><td class="good">A good fit</td><td>Simple blocking code per connection, without a thread-pool limit</td></tr>
+  <tr><td>Post-trade service: database and Kafka calls</td><td class="good">A good fit</td><td>Lots of waiting on I/O</td></tr>
+  <tr><td>The matching thread</td><td class="bad">No</td><td>It never waits on I/O and must own a core: a dedicated platform thread, possibly pinned to a CPU</td></tr>
+  <tr><td>Journal stage</td><td class="bad">No</td><td>One long-lived thread doing sequential disk writes</td></tr>
+</table></div>
+<p>A caveat in Java 21: a virtual thread blocking inside a <code>synchronized</code> block "pins" its carrier thread. Java 24 removed most of that (JEP 491); on 21, prefer <code>ReentrantLock</code> around blocking calls.</p>
+
+<h2 id="more">8. Smaller features worth knowing</h2>
+<div class="table-wrap"><table>
+  <tr><th>Feature</th><th>Since</th><th>Example</th></tr>
+  <tr><td>Switch expressions with <code>-&gt;</code></td><td>14</td><td>No fall-through; the switch returns a value</td></tr>
+  <tr><td>Pattern <code>instanceof</code></td><td>16</td><td><code>if (event instanceof Trade t) total += t.quantity();</code></td></tr>
+  <tr><td>Text blocks</td><td>15</td><td>Multi-line strings for JSON and SQL in tests</td></tr>
+  <tr><td><code>var</code></td><td>10</td><td>Local type inference; use where the type is obvious</td></tr>
+  <tr><td>Sequenced collections</td><td>21</td><td><code>list.getFirst()</code>, <code>list.getLast()</code>, <code>reversed()</code>; used in Prayog's tests</td></tr>
+  <tr><td>Immutable factories</td><td>9 / 10</td><td><code>List.of</code>, <code>Map.of</code>, <code>List.copyOf</code></td></tr>
+  <tr><td><code>HexFormat</code></td><td>17</td><td>The SBE golden-bytes test prints bytes with it</td></tr>
+</table></div>
+
+<h2 id="prayog">9. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th>Feature</th></tr>
+  <tr><td><code>Command</code>, <code>ExchangeEvent</code></td><td>Sealed interfaces of records</td></tr>
+  <tr><td><code>MatchingEngine.apply</code></td><td>Exhaustive pattern switch over <code>Command</code></td></tr>
+  <tr><td><code>JournalCodec.encode</code></td><td>Exhaustive switch expressions over commands and events. A new event type cannot be journaled by accident without a codec.</td></tr>
+  <tr><td><code>Instrument</code>, <code>SessionSchedule</code>, <code>PipelineConfig</code></td><td>Records with validation in compact constructors</td></tr>
+  <tr><td><code>EngineSetup</code></td><td>Record that defensively copies its list</td></tr>
+  <tr><td><code>Replay.Report</code>, <code>Segments.ScanResult</code></td><td>Small records as multi-value return types</td></tr>
+</table></div>
+
+<h2 id="faq">10. Questions</h2>
+<h3>Records or Lombok?</h3>
+<p>Records are part of the language: no annotation processor, no IDE plugin, and the compiler knows their structure (record patterns). Lombok still covers cases records don't, such as builders and mutable classes. For immutable data, records are the standard choice.</p>
+<h3>Is a pattern switch slower than a virtual method call?</h3>
+<p>Not meaningfully. The JIT compiles it to a short chain of type checks, which stays predictable even with many types, while a virtual call with many receiver types becomes "megamorphic" and can't be inlined. Measure before choosing either for speed; choose the switch for the compile-time completeness check.</p>
+<h3>When would I still use the visitor pattern?</h3>
+<p>On older Java versions, or when the type hierarchy is open (third parties add types) and the operations are closed. Sealed types plus switch suit the opposite: a closed set of types, with new operations added often.</p>
+
+<footer>Prayog learning pages &middot; Public sources: JEPs 395 (records), 409 (sealed classes), 440 and 441 (record patterns, pattern matching for switch), 444 (virtual threads), 431 (sequenced collections), 491. Related: <a href="java-gc-jit.html">GC and JIT</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const TYPES = ["OrderAccepted", "OrderRejected", "OrderCancelled", "OrderModified", "Trade", "BookUpdate", "SessionStateChanged"];
+  const box = document.getElementById("cases");
+  TYPES.forEach((t, i) => {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox" data-t="${t}" ${i !== 5 ? "checked" : ""}> ${t}`;
+    box.appendChild(l);
+  });
+  function check() {
+    const handled = [...box.querySelectorAll("input:checked")].map(c => c.dataset.t);
+    const dflt = document.getElementById("dflt").checked, added = document.getElementById("newType").checked;
+    const permitted = added ? [...TYPES, "OrderExpired"] : TYPES;
+    const missing = permitted.filter(t => !handled.includes(t));
+    const lines = [`$ javac ...   // switch (event) { ${handled.map(t => "case " + t + " e -> ...;").join(" ")}${dflt ? " default -> ...;" : ""} }`, ""];
+    if (dflt) {
+      lines.push("Compiles.");
+      if (missing.length) lines.push("", `But ${missing.join(", ")} silently fall${missing.length === 1 ? "s" : ""} into default.`,
+        added ? "The new OrderExpired type was never handled, and nothing told you." : "A future event type would go there too, unnoticed.");
+      else lines.push("", "Everything is handled today, but a future event type would fall into default without a warning.");
+    } else if (missing.length) {
+      lines.push("JournalCodec.java:212: error: the switch expression does not cover all possible input values",
+        `        missing: ${missing.join(", ")}`, "1 error", "", "The compiler points at every switch that needs updating. Nothing can ship until they all handle it.");
+    } else {
+      lines.push("Compiles. Every permitted type is handled.", "Add a type to the sealed interface and this switch will stop compiling until it handles it.");
+    }
+    document.getElementById("javac").textContent = lines.join("\n");
+  }
+  document.querySelectorAll(".sim input").forEach(i => i.addEventListener("change", check));
+  check();
+})();
+</script>
+</body>
+</html>
