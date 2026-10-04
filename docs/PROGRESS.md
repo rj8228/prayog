@@ -18,7 +18,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S8 Journal and deterministic replay (6 h) — ADR 0007
 
 ## M3 Runnable app
-- [ ] S2 Local infrastructure (5 h)
+- [x] S2 Local infrastructure (5 h) — ADR 0008
 - [ ] S10 Gateway (6 h)
 - [ ] S11 Market data (5 h)
 - [ ] S12 Python SDK and sample bot (5 h)

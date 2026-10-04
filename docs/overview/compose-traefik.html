@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compose and Traefik Explained</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  .tl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 10px; font-size: 13px; align-items: center; margin: 10px 0; }
+  .bar { position: relative; height: 20px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+  .seg { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .seg.start { background: color-mix(in srgb, var(--f1) 55%, transparent); }
+  .seg.ready { background: color-mix(in srgb, var(--ok) 55%, transparent); }
+  .seg.crash { background: color-mix(in srgb, var(--hot) 70%, transparent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#mall">2. A business example</a>
+  <a href="#containers">3. Images and containers</a>
+  <a href="#compose">4. Compose basics</a>
+  <a href="#health">5. Started vs. ready</a>
+  <a href="#startsim">6. Try it: start order</a>
+  <a href="#proxy">7. Reverse proxy and Traefik</a>
+  <a href="#route">8. Try it: routing</a>
+  <a href="#security">9. Security edges</a>
+  <a href="#prayog">10. In Prayog</a>
+  <a href="#faq">11. Questions</a>
+</nav>
+<main>
+<h1>Docker Compose and Traefik</h1>
+<p class="lede">How <code>make up</code> turns one YAML file into a running exchange platform: containers, networks, volumes, health checks and start order, then a reverse proxy that gives every service a friendly name on a single port.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>Prayog needs PostgreSQL, Kafka, Redis, Keycloak and a proxy, each at a specific version and configuration, started in the right order, on every developer's machine and in CI. Installing them by hand gives "works on my machine" bugs. Compose describes the whole stack in one file, so everyone runs exactly the same thing.</p>
+
+<h2 id="mall">2. A business example: the shopping mall</h2>
+<ul>
+  <li>Each <strong>shop</strong> is a container: self-contained, built from a standard fit-out plan (the image).</li>
+  <li>The <strong>mall plan</strong> (Compose file) says which shops exist, where their storerooms are (volumes) and which shop needs which other one to open first (depends_on).</li>
+  <li>A shop's door being unlocked doesn't mean it's ready to serve. The manager waits for the "open" sign (health check) before sending customers.</li>
+  <li>The <strong>front desk</strong> (Traefik) is the only public entrance. Ask for "Keycloak" and you're walked to that shop; ask for a shop that doesn't exist and you get "no such shop" (404).</li>
+</ul>
+
+<h2 id="containers">3. Images and containers</h2>
+<ul>
+  <li><strong>Image:</strong> a read-only file system in layers plus a default command, such as <code>postgres:16.15-alpine</code>. Built once, pulled from a registry (Docker Hub, quay.io).</li>
+  <li><strong>Container:</strong> a running process isolated with Linux namespaces (its own file system view, network, process list) and limited with cgroups (memory, CPU). Not a virtual machine: it shares the host kernel, so it starts in milliseconds. On a Mac, Docker Desktop runs one small Linux VM that hosts all containers.</li>
+  <li><strong>Tags vs. digests:</strong> a tag like <code>16-alpine</code> moves when a new patch is published; <code>16.15-alpine</code> rarely does; a digest (<code>@sha256:...</code>) never does. Prayog pins exact patch tags.</li>
+  <li><strong>Architecture:</strong> images are published per CPU type. All of Prayog's images ship ARM builds, so they run natively on Apple Silicon.</li>
+</ul>
+
+<h2 id="compose">4. Compose basics</h2>
+<div class="table-wrap"><table>
+  <tr><th>Concept</th><th>What it does</th><th>Prayog example</th></tr>
+  <tr><td>Service</td><td>A container definition: image, command, environment</td><td><code>kafka</code>, <code>keycloak</code></td></tr>
+  <tr><td>Network</td><td>Compose puts all services on one private network with DNS: each service is reachable by its name</td><td>Keycloak connects to <code>postgres:5432</code>; containers use <code>kafka:9092</code></td></tr>
+  <tr><td>Port mapping</td><td>Publishes a container port on the host</td><td><code>127.0.0.1:5432:5432</code>: only your own machine can connect</td></tr>
+  <tr><td>Named volume</td><td>Storage that outlives the container</td><td><code>postgres-data</code>, <code>kafka-data</code>, <code>redis-data</code></td></tr>
+  <tr><td>Bind mount</td><td>A host folder inside the container</td><td>The realm file at <code>/opt/keycloak/data/import</code>, read-only</td></tr>
+  <tr><td>Environment and <code>.env</code></td><td><code>${VAR}</code> is filled from <code>.env</code>; <code>${VAR:?msg}</code> refuses to start if it's missing</td><td>Every password and client secret</td></tr>
+  <tr><td>Profiles</td><td>Start only groups of services</td><td><code>infra</code> now, <code>app</code> from S10, <code>obs</code> in S21</td></tr>
+  <tr><td>One-shot job</td><td>A container that does one task and exits 0</td><td><code>kafka-init</code> creates the topic</td></tr>
+</table></div>
+
+<h2 id="health">5. Started vs. ready</h2>
+<p>A container "starts" when its process starts. PostgreSQL then needs a few seconds before it accepts connections; Keycloak needs about 20. If Keycloak starts first and tries to connect, it fails and exits.</p>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Waits for</th></tr>
+  <tr><td><code>depends_on: [postgres]</code></td><td>Postgres <em>started</em>. Not enough.</td></tr>
+  <tr><td><code>depends_on: postgres: condition: service_healthy</code></td><td>Postgres's health check passing</td></tr>
+  <tr><td><code>condition: service_completed_successfully</code></td><td>A one-shot job exiting 0</td></tr>
+  <tr><td><code>docker compose up --wait</code></td><td>Every service healthy (or running, if it has no check) before the command returns</td></tr>
+</table></div>
+<p>A health check should ask the question clients care about: <code>pg_isready</code> rather than "is port 5432 open", a real Kafka API call, Keycloak's <code>/health/ready</code>. Prayog's Keycloak check opens a TCP connection with bash's built-in <code>/dev/tcp</code>, because the image has no curl.</p>
+
+<h2 id="startsim">6. Try it: start order</h2>
+<p>Each service takes a while to start and then to become ready. Compare plain <code>depends_on</code> with health conditions.</p>
+<div class="sim">
+  <div class="controls">
+    <label style="flex-direction:row;align-items:center;gap:8px">Keycloak and kafka-init wait for
+      <select id="mode"><option value="healthy">service_healthy</option><option value="started">service started only</option></select></label>
+  </div>
+  <div class="tl" id="timeline"></div>
+  <div class="legend"><span style="--c:var(--f1)">starting</span><span style="--c:var(--ok)">ready</span><span style="--c:var(--hot)">failed: dependency not ready</span></div>
+  <div class="out" id="startOut" style="margin-top:10px"></div>
+</div>
+
+<h2 id="proxy">7. Reverse proxy and Traefik</h2>
+<p>A <strong>reverse proxy</strong> receives every request on one port and forwards it to the right service. Benefits: one address to remember, friendly host names, one place for TLS, redirects and access logs, and services that never expose ports themselves.</p>
+<p>Traefik's model:</p>
+<div class="table-wrap"><table>
+  <tr><th>Piece</th><th>Meaning</th><th>Prayog</th></tr>
+  <tr><td>Entrypoint</td><td>A port Traefik listens on</td><td><code>web</code> = :80</td></tr>
+  <tr><td>Router</td><td>A rule that matches requests</td><td><code>Host(`auth.prayog.localhost`)</code></td></tr>
+  <tr><td>Service</td><td>Where matched requests go</td><td>Keycloak container port 8080</td></tr>
+  <tr><td>Middleware</td><td>Changes on the way (auth, headers, rate limits)</td><td>None yet</td></tr>
+  <tr><td>Provider</td><td>Where Traefik learns routes</td><td>Docker: labels on each container, read through the Docker socket</td></tr>
+</table></div>
+<p>With <code>exposedbydefault=false</code>, a container is routed only if it says <code>traefik.enable=true</code>, so nothing is published by accident. Traefik forwards the original host and client address in <code>X-Forwarded-*</code> headers; Keycloak trusts them (<code>KC_PROXY_HEADERS=xforwarded</code>) to build correct URLs.</p>
+<div class="note"><strong>Why <code>.localhost</code>?</strong> RFC 6761 reserves <code>localhost</code> and every name under it for the local machine. Browsers, curl and (on this Mac) Python resolve <code>anything.prayog.localhost</code> to 127.0.0.1 with no DNS setup. Some tools don't, hence the <code>/etc/hosts</code> line in the README.</div>
+
+<h2 id="route">8. Try it: routing</h2>
+<p>Type a host name. The table of routers is Prayog's real one.</p>
+<div class="sim">
+  <div class="form-grid"><label>Host header <input id="host" value="auth.prayog.localhost"></label><label>Path <input id="path" value="/realms/prayog/.well-known/openid-configuration"></label></div>
+  <div class="out" id="routeOut"></div>
+</div>
+
+<h2 id="security">9. Security edges</h2>
+<ul>
+  <li><strong>Ports bound to 127.0.0.1.</strong> <code>"5432:5432"</code> would listen on every network interface, so anyone on the same Wi-Fi could reach your database. <code>"127.0.0.1:5432:5432"</code> keeps it on your machine.</li>
+  <li><strong>The Docker socket.</strong> Whoever can talk to it controls Docker, which is close to root on the host. Read-only stops writes, but reading still reveals every container's environment, secrets included. Fine on a laptop; hosted setups put a filtering socket proxy in between or use file-based routes.</li>
+  <li><strong>Plain HTTP.</strong> Acceptable only on loopback. Keycloak's <code>sslRequired: external</code> enforces HTTPS for non-private addresses.</li>
+  <li><strong>Secrets</strong> come from a git-ignored <code>.env</code> generated per machine; CI generates throwaway ones.</li>
+</ul>
+
+<h2 id="prayog">10. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Command</th><th>Does</th></tr>
+  <tr><td><code>make env</code></td><td>Creates <code>.env</code> with random secrets (once)</td></tr>
+  <tr><td><code>make up</code></td><td><code>compose --profile infra up -d --wait</code>: returns when all is healthy</td></tr>
+  <tr><td><code>make smoke</code></td><td>20 end-to-end checks; also run in CI</td></tr>
+  <tr><td><code>make ps</code>, <code>make logs SERVICE=kafka</code></td><td>Status and logs</td></tr>
+  <tr><td><code>make down</code> / <code>make reset</code></td><td>Stop, keeping data / stop and delete data (needed after realm or init changes)</td></tr>
+</table></div>
+<p>Measured on an 8 GB M1: about 2.5 minutes for the first start (image pulls), 22 seconds afterwards, about 1.1 GB of memory in total.</p>
+
+<h2 id="faq">11. Questions</h2>
+<h3>How does this map to Kubernetes?</h3>
+<p>Services become Deployments (or StatefulSets for databases and Kafka), health checks become readiness and liveness probes, Traefik's labels become Ingress or Gateway API routes, named volumes become PersistentVolumeClaims, and <code>.env</code> becomes Secrets. The ideas carry over directly.</p>
+<h3>Why Traefik and not nginx?</h3>
+<p>Both work. Traefik discovers routes from container labels and updates them live, so adding a service needs no proxy config file and no reload. nginx needs a config entry per service.</p>
+<h3>Why not run Keycloak without a database for local use?</h3>
+<p>Its development mode can use an embedded file database, but then the local setup differs from a real one. Running it on PostgreSQL costs about 50 MB and tests the real path.</p>
+
+<footer>Prayog learning pages &middot; S2 &middot; Public sources: Docker and Compose documentation, Traefik v3 documentation, RFC 6761. Related: <a href="kafka.html">Kafka</a>, <a href="oauth-oidc.html">OAuth2 and OIDC</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // Seconds to start, then to become ready, roughly as measured on the dev machine.
+  const SVC = [
+    { name: "postgres", start: 1, ready: 4 },
+    { name: "redis", start: 1, ready: 1 },
+    { name: "kafka", start: 1, ready: 12 },
+    { name: "traefik", start: 1, ready: 1 },
+    { name: "keycloak", start: 0, ready: 20, needs: "postgres" },
+    { name: "kafka-init", start: 0, ready: 3, needs: "kafka", oneShot: true }];
+  function render() {
+    const healthy = $("mode").value === "healthy", T = 42, at = {}, rows = [], notes = [];
+    for (const s of SVC) {
+      const dep = s.needs ? at[s.needs] : null;
+      const begin = s.needs ? (healthy ? dep.readyAt : dep.startedAt) : 0;
+      const startedAt = begin + s.start;
+      let readyAt = startedAt + s.ready, crashed = false;
+      if (s.needs && !healthy && dep.readyAt > startedAt + 2) {
+        crashed = true; readyAt = startedAt + 2;
+        notes.push(`${s.name} started at ${startedAt}s, tried ${s.needs} (not ready until ${dep.readyAt}s) and ${s.oneShot ? "exited with an error" : "crashed"}.`);
+      }
+      at[s.name] = { startedAt, readyAt };
+      const pct = x => (100 * x / T).toFixed(1) + "%";
+      rows.push(`<div>${s.name}</div><div class="bar">
+        <div class="seg start" style="left:${pct(begin)};width:${pct(startedAt - begin + (crashed ? 0 : 0))}"></div>
+        <div class="seg ${crashed ? "crash" : "start"}" style="left:${pct(startedAt)};width:${pct(readyAt - startedAt)}"></div>
+        ${crashed ? "" : `<div class="seg ready" style="left:${pct(readyAt)};width:${pct(Math.max(0, T - readyAt))}"></div>`}</div>`);
+    }
+    $("timeline").innerHTML = rows.join("");
+    const end = Math.max(...Object.values(at).map(x => x.readyAt));
+    $("startOut").textContent = healthy
+      ? `Everything is healthy at about ${end}s. Keycloak waits for Postgres to be ready; kafka-init waits for Kafka.\n` +
+        `make up returns here (up --wait), so smoke tests and services never race the stack.`
+      : notes.join("\n") + `\nWith a restart policy they'd retry and eventually work, but every start becomes a race and the logs fill with errors.`;
+  }
+  $("mode").onchange = render; render();
+
+  const ROUTES = [
+    ["auth", "auth.prayog.localhost", "keycloak:8080", "Keycloak"],
+    ["app", "app.prayog.localhost", "app-placeholder:80", "whoami placeholder until the web app (S18)"],
+    ["api", "api.prayog.localhost", "api-placeholder:80", "whoami placeholder until the gateway (S10)"],
+    ["dashboard", "traefik.prayog.localhost", "api@internal", "Traefik's own dashboard"]];
+  function route() {
+    const host = $("host").value.trim().toLowerCase().replace(/:80$/, ""), path = $("path").value || "/";
+    const lines = ROUTES.map(([n, h]) => `router ${n.padEnd(10)} Host(\`${h}\`)${" ".repeat(Math.max(1, 28 - h.length))}${h === host ? "MATCH" : "-"}`);
+    const hit = ROUTES.find(r => r[1] === host);
+    lines.push("", hit ? `GET http://${host}${path}\n  -> forwarded to ${hit[2]} (${hit[3]})\n  with X-Forwarded-Host: ${host}, X-Forwarded-Proto: http`
+      : `GET http://${host}${path}\n  -> no router matches: Traefik answers 404 itself. ${host.endsWith(".localhost") ? "" : "(And this name may not even resolve to your machine.)"}`);
+    $("routeOut").textContent = lines.join("\n");
+  }
+  $("host").addEventListener("input", route); $("path").addEventListener("input", route); route();
+})();
+</script>
+</body>
+</html>

@@ -18,6 +18,9 @@ Interactive explainers in [`docs/overview/`](../overview/), each with a business
 | Trading infrastructure | [sbe.html](../overview/sbe.html) | Simple Binary Encoding: layout, flyweights, schema evolution, live encoder (S8) |
 | Trading infrastructure | [fix-protocol.html](../overview/fix-protocol.html) | FIX tag=value, order lifecycle, ExecutionReport, session layer and resend, message builder and parser |
 | Trading infrastructure | [journaling.html](../overview/journaling.html) | fsync, write-ahead journal, group commit, torn writes, CRC32C, segments, replay, crash simulator (S8) |
+| Platform | [kafka.html](../overview/kafka.html) | Kafka basics: log, topics, partitions, offsets, consumer groups, delivery guarantees, KRaft, listeners (S2) |
+| Platform | [oauth-oidc.html](../overview/oauth-oidc.html) | OAuth2 and OpenID Connect with Keycloak: clients, PKCE, client credentials, JWT claims and validation (S2) |
+| Platform | [compose-traefik.html](../overview/compose-traefik.html) | Containers, Docker Compose, health checks, volumes, reverse proxying with Traefik (S2) |
 | Core Java | [java-memory-model.html](../overview/java-memory-model.html) | Happens-before, volatile, release/acquire, CAS, cache lines, false sharing, litmus test |
 | Core Java | [java-off-heap.html](../overview/java-off-heap.html) | Heap vs direct vs mapped buffers, Unsafe, VarHandle, FFM API, Agrona, `--add-exports`, endianness |
 | Core Java | [java-gc-jit.html](../overview/java-gc-jit.html) | Allocation, collectors (G1, ZGC), garbage-free code, JIT tiers, warm-up, safepoints, JMH, coordinated omission |
@@ -28,6 +31,7 @@ Interactive explainers in [`docs/overview/`](../overview/), each with a business
 | Session | File | Main topics |
 |---|---|---|
 | S1 Repo skeleton | [S01-repo-skeleton.md](S01-repo-skeleton.md) | Module boundaries, Maven parent POMs, wrappers, lock files, pinning CI actions |
+| S2 Local infrastructure | [S02-local-infrastructure.md](S02-local-infrastructure.md) | Compose, health checks, Kafka KRaft and listeners, OAuth2/OIDC and PKCE, reverse proxy, secrets |
 | S3–S4 Contracts and order book | [S03-S04-contracts-and-order-book.md](S03-S04-contracts-and-order-book.md) | JSON Schema contracts, integer money, price-time priority, order book data structures, determinism, property testing |
 | S5 Market, cancel, modify | [S05-market-cancel-modify.md](S05-market-cancel-modify.md) | Commands and event sourcing, modify semantics, queue priority, information leaks, test coverage |
 | S6 Bands, sessions, STP | [S06-bands-sessions-stp.md](S06-bands-sessions-stp.md) | Price bands, session states, DAY expiry, self-trade prevention, kill switch |

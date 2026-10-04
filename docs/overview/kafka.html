@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Explained</title>
+<link rel="stylesheet" href="explainer.css">
+<style>
+  .parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+  .part { border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 120px; background: var(--bg); }
+  .part h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .recs { display: flex; flex-wrap: wrap; gap: 4px; }
+  .r { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+  .r.done { opacity: .45; }
+  .who { font-size: 12.5px; margin-top: 6px; }
+  @media (max-width: 600px) { .parts { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#register">2. A business example</a>
+  <a href="#model">3. Topics, partitions, offsets</a>
+  <a href="#produce">4. Producing</a>
+  <a href="#consume">5. Consumer groups</a>
+  <a href="#delivery">6. Delivery guarantees</a>
+  <a href="#sim">7. Try it</a>
+  <a href="#cluster">8. Brokers, replicas, KRaft</a>
+  <a href="#listeners">9. Listeners</a>
+  <a href="#prayog">10. Kafka in Prayog</a>
+  <a href="#faq">11. Questions</a>
+</nav>
+<main>
+<h1>Kafka, from first principles</h1>
+<p class="lede">Apache Kafka is a durable, replayable log that many programs can write to and read from at their own pace. It's how Prayog gets every trade from the exchange to the post-trade, leaderboard and market-data services without slowing the exchange down. This page assumes no prior Kafka knowledge.</p>
+
+<h2 id="problem">1. The problem</h2>
+<p>When a trade happens, several other parts of Prayog care: post-trade updates positions and P&amp;L, the leaderboard re-ranks, the web terminal shows the fill. The exchange could call each of them directly, but then:</p>
+<ul>
+  <li>a slow or crashed service would slow or block the exchange;</li>
+  <li>adding a new consumer means changing the exchange;</li>
+  <li>a service that was down for five minutes would have missed those trades forever.</li>
+</ul>
+<p>Kafka sits in between. The exchange writes each event once and moves on. Each service reads at its own speed, and a service that was down simply continues from where it stopped.</p>
+
+<h2 id="register">2. A business example: the numbered order register</h2>
+<p>A wholesale market keeps a big bound register at the front desk. Every sale is written on the next numbered line, in ink. Nobody tears out pages.</p>
+<ul>
+  <li><strong>Accounts</strong> reads the register to bill customers; it keeps a bookmark at the last line it processed.</li>
+  <li><strong>Warehouse</strong> reads the same register to ship goods, with its own bookmark.</li>
+  <li>If Accounts is out sick for a day, nothing is lost: tomorrow it continues from its bookmark.</li>
+  <li>When the register gets too busy for one clerk, the market keeps <strong>three registers</strong>, one per product range. Each register is still strictly in order; across registers there is no single order.</li>
+</ul>
+<p>The register is a <strong>topic</strong>, the three registers are <strong>partitions</strong>, line numbers are <strong>offsets</strong>, and bookmarks are <strong>committed offsets</strong>.</p>
+
+<h2 id="model">3. Topics, partitions and offsets</h2>
+<svg viewBox="0 0 860 200" role="img" aria-label="A topic with three partitions. Each partition is an append-only list of records numbered by offset. Producers append at the end; consumers read from their own offset.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+  <text x="10" y="18">Topic prayog.exchange.events.v1</text>
+  <g font-size="11">
+    <text x="10" y="52" class="small muted">partition 0</text><text x="10" y="102" class="small muted">partition 1</text><text x="10" y="152" class="small muted">partition 2</text>
+  </g>
+  <g id="cells"></g>
+  <line x1="700" y1="45" x2="760" y2="45" class="line" marker-end="url(#a)"/><text x="770" y="49" class="small">new records</text>
+  <text x="780" y="62" class="small muted">appended here</text>
+  <text x="90" y="190" class="small muted">offsets 0, 1, 2 ... per partition. Reading never removes a record; old records are deleted only by retention (time or size).</text>
+</svg>
+<ul>
+  <li><strong>Record:</strong> a key, a value (bytes: JSON in Prayog), headers and a timestamp.</li>
+  <li><strong>Topic:</strong> a named stream of records, like a table name.</li>
+  <li><strong>Partition:</strong> a topic is split into partitions, each an ordered, append-only log stored on disk. Partitions are the unit of parallelism and of ordering.</li>
+  <li><strong>Offset:</strong> a record's position in its partition. It never changes.</li>
+  <li><strong>Retention:</strong> records stay for a set time or size (7 days by default), whether or not anyone has read them. That's what makes replay possible.</li>
+</ul>
+<div class="note">Look familiar? A partition is a journal: append-only segment files, numbered records, sequential disk writes. Kafka is built on the same ideas as Prayog's own journal (<a href="journaling.html">journaling</a>), exposed over the network to many readers.</div>
+
+<h2 id="produce">4. Producing: keys decide the partition</h2>
+<p>The producer picks the partition from the record's <strong>key</strong>: <code>hash(key) mod partitions</code>. Same key, same partition, so <strong>records with the same key stay in order</strong>. Records with different keys may land in different partitions and be read in any relative order.</p>
+<p>Prayog keys exchange events by <strong>symbol</strong>. All INFY events are in order relative to each other; INFY and TCS events can interleave. That's exactly the guarantee consumers need: an INFY position is built from INFY trades in order.</p>
+<div class="table-wrap"><table>
+  <tr><th>Producer setting</th><th>Meaning</th></tr>
+  <tr><td><code>acks=all</code></td><td>The write counts only when every in-sync replica has it. The safe setting, and the default since Kafka 3.0.</td></tr>
+  <tr><td><code>enable.idempotence=true</code></td><td>Retries can't create duplicates or reorder within a partition. Also default since 3.0.</td></tr>
+  <tr><td><code>linger.ms</code>, <code>batch.size</code></td><td>Wait a moment to send records in batches: more throughput, a little latency. Group commit again.</td></tr>
+</table></div>
+
+<h2 id="consume">5. Consumer groups</h2>
+<p>Consumers that share a <code>group.id</code> form a <strong>consumer group</strong>. Kafka gives each partition to exactly one member of the group, so the members split the work:</p>
+<ul>
+  <li>3 partitions, 1 consumer: it reads all three.</li>
+  <li>3 partitions, 3 consumers: one partition each.</li>
+  <li>3 partitions, 4 consumers: one consumer sits idle. <strong>Partitions cap a group's parallelism</strong>; that's why the partition count is chosen up front.</li>
+</ul>
+<p>When a member joins, leaves or crashes, the group <strong>rebalances</strong>: partitions are reassigned. The new owner starts from the group's <strong>committed offset</strong> for that partition, the bookmark, stored in Kafka's internal topic <code>__consumer_offsets</code>.</p>
+<p>A different group (say, the leaderboard) reads the same records independently, with its own bookmarks. That's how one topic feeds many services.</p>
+
+<h2 id="delivery">6. Delivery guarantees</h2>
+<p>The question is when the consumer commits its bookmark, relative to doing the work:</p>
+<div class="table-wrap"><table>
+  <tr><th>Guarantee</th><th>How</th><th>After a crash</th></tr>
+  <tr><td>At most once</td><td>Commit, then process</td><td>A record committed but not processed is lost</td></tr>
+  <tr><td><strong>At least once</strong></td><td>Process, then commit</td><td>A record processed but not committed is processed <em>again</em></td></tr>
+  <tr><td>Exactly once (effectively)</td><td>At least once + an idempotent consumer, or Kafka transactions for Kafka-to-Kafka pipelines</td><td>Duplicates arrive but have no effect</td></tr>
+</table></div>
+<p>Prayog uses <strong>at-least-once with idempotent consumers</strong> (BUILD_PLAN 16.2 #18). Every event carries <code>eventId</code> = the exchange's event sequence number. The plan for post-trade (S16): store the last applied id per partition in the same database transaction as the position update, and skip anything at or below it. A redelivered trade is recognised and ignored, so P&amp;L is never counted twice.</p>
+
+<h2 id="sim">7. Try it: produce, consume, crash</h2>
+<p>Three partitions, keyed by symbol. Produce some trades, set how many consumers the group has, and let them work. Then crash one between "processed" and "committed" and watch the redelivery.</p>
+<div class="sim">
+  <div class="controls">
+    <button class="primary" data-sym="INFY">Trade INFY</button>
+    <button class="primary" data-sym="TCS">Trade TCS</button>
+    <button class="primary" data-sym="HDFC">Trade HDFC</button>
+    <button class="primary" data-sym="RELIANCE">Trade RELIANCE</button>
+    <button id="burst">10 random trades</button>
+  </div>
+  <div class="controls">
+    <label style="flex-direction:row;align-items:center;gap:8px">consumers in group
+      <select id="members"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+    <button id="poll">Consume one batch</button>
+    <button id="crash">Crash a consumer mid-batch</button>
+    <button id="reset">Reset</button>
+  </div>
+  <div class="parts" id="parts"></div>
+  <div class="legend"><span style="--c:var(--f2)">INFY</span><span style="--c:var(--f3)">TCS</span><span style="--c:var(--f4)">HDFC</span><span style="--c:var(--f5)">RELIANCE</span><span style="--c:var(--f6)">faded = before the committed offset</span></div>
+  <div class="out" id="klog" style="margin-top:10px;max-height:170px;overflow-y:auto"></div>
+</div>
+
+<h2 id="cluster">8. Brokers, replicas and KRaft</h2>
+<ul>
+  <li><strong>Broker:</strong> a Kafka server. A cluster has several; partitions are spread across them.</li>
+  <li><strong>Replication:</strong> each partition has a leader replica and followers on other brokers. Producers and consumers talk to the leader; followers copy it. If the leader's broker dies, an in-sync follower becomes leader. Production clusters use replication factor 3.</li>
+  <li><strong>Controller:</strong> keeps the cluster's metadata (which topics exist, who leads each partition). Kafka used to rely on a separate ZooKeeper cluster for this. <strong>KRaft</strong> (Kafka Raft) moved it into Kafka itself: a small quorum of controller nodes agree on metadata using the Raft consensus algorithm. Kafka 4.0 removed ZooKeeper entirely.</li>
+</ul>
+<p>Prayog runs one node that is both broker and controller (<code>KAFKA_PROCESS_ROLES=broker,controller</code>), with replication factor 1. There's no redundancy, which is fine for a laptop, and the 3 partitions still make consumers deal with real partitioning.</p>
+
+<h2 id="listeners">9. Listeners: the most common setup mistake</h2>
+<p>A client connects in two steps:</p>
+<ol class="steps">
+  <li>It connects to a <strong>bootstrap</strong> address and asks for metadata: "which broker leads which partition, and how do I reach it?"</li>
+  <li>The broker answers with its <strong>advertised</strong> address, and the client opens new connections to that address for all real traffic.</li>
+</ol>
+<p>So the advertised address must be reachable <em>from wherever the client runs</em>. Containers reach the broker as <code>kafka</code>; your Mac can't resolve that name, but can reach <code>localhost:9094</code>. Prayog therefore has one listener per network:</p>
+<div class="table-wrap"><table>
+  <tr><th>Listener</th><th>Port</th><th>Advertised as</th><th>Used by</th></tr>
+  <tr><td><code>INTERNAL</code></td><td>9092</td><td><code>kafka:9092</code></td><td>Services in Docker (post-trade, exchange in the <code>app</code> profile)</td></tr>
+  <tr><td><code>EXTERNAL</code></td><td>9094</td><td><code>localhost:9094</code></td><td>Tools and services run on the host during development</td></tr>
+  <tr><td><code>CONTROLLER</code></td><td>9093</td><td>not advertised</td><td>KRaft quorum traffic only</td></tr>
+</table></div>
+<div class="warn">Symptom of a wrong advertised address: the client "connects" (bootstrap works) and then times out on every send, because step 2 points somewhere it can't reach.</div>
+
+<h2 id="prayog">10. Kafka in Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>What</th><th>Value</th><th>Why</th></tr>
+  <tr><td>Topic</td><td><code>prayog.exchange.events.v1</code></td><td>Versioned name: a breaking format change gets a new topic</td></tr>
+  <tr><td>Partitions</td><td>3, keyed by symbol</td><td>Per-symbol order; up to 3 consumers per group in parallel</td></tr>
+  <tr><td>Format</td><td>JSON validated against JSON Schema in <code>contracts/</code></td><td>Readable by Python and TypeScript consumers; <a href="sbe.html">SBE</a> stays inside the engine</td></tr>
+  <tr><td>Producer</td><td>A downstream pipeline stage of the exchange (S15), after the journal</td><td>Never on the order path; if Kafka is down, the journal still has everything and the publisher catches up</td></tr>
+  <tr><td>Delivery</td><td>At least once; <code>eventId</code> = event seq; idempotent consumers</td><td>No lost events, no double-counted trades</td></tr>
+  <tr><td>Topic creation</td><td><code>kafka-init</code> job; auto-create off</td><td>A typo fails loudly instead of creating a topic</td></tr>
+</table></div>
+
+<h2 id="faq">11. Questions</h2>
+<h3>Why not put Kafka on the order path instead of the journal?</h3>
+<p>A network round trip to a broker (and its replicas, with <code>acks=all</code>) costs far more than an append to a local file, and Prayog's invariants forbid network calls on the order path. The journal makes the order durable; Kafka distributes the results afterwards.</p>
+<h3>Kafka or RabbitMQ?</h3>
+<p>RabbitMQ is a message broker: messages are routed to queues and removed once acknowledged. Kafka is a log: records stay for the retention period and any number of groups can read or re-read them. For "every service needs every trade, and must be able to catch up or replay", the log model fits.</p>
+<h3>Can I change the number of partitions later?</h3>
+<p>You can add partitions, but <code>hash(key) mod partitions</code> then sends some keys to a different partition, breaking per-key order across the change. Choose the count up front; that's why Prayog fixes it at 3 in the init job.</p>
+
+<footer>Prayog learning pages &middot; S2 &middot; Public sources: Apache Kafka documentation (design, KRaft, KIP-500, producer and consumer configs). Related: <a href="journaling.html">journaling</a>, <a href="compose-traefik.html">Compose and Traefik</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  // Static diagram cells.
+  const g = document.getElementById("cells");
+  [[0, 7], [1, 5], [2, 6]].forEach(([p, n]) => {
+    for (let i = 0; i < n; i++) {
+      g.insertAdjacentHTML("beforeend",
+        `<rect x="${90 + i * 60}" y="${32 + p * 50}" width="54" height="28" rx="4" class="box"/><text x="${117 + i * 60}" y="${51 + p * 50}" text-anchor="middle" class="small">${i}</text>`);
+    }
+  });
+
+  const COLORS = { INFY: "--f2", TCS: "--f3", HDFC: "--f4", RELIANCE: "--f5" };
+  const SYMS = Object.keys(COLORS);
+  let parts, committed, nextId, log;
+  const $ = id => document.getElementById(id);
+  // A stand-in for Kafka's murmur2 key hash: any stable hash shows the idea.
+  const partitionOf = key => [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 3;
+  function reset() { parts = [[], [], []]; committed = [0, 0, 0]; nextId = 1; log = []; say("Empty topic with 3 partitions. Produce some trades."); draw(); }
+  function say(m) { log.unshift(m); $("klog").textContent = log.slice(0, 40).join("\n"); }
+  function owners() {
+    const n = +$("members").value, map = {};
+    for (let p = 0; p < 3; p++) map[p] = p % n; // simple round-robin assignment
+    return { n, map };
+  }
+  function draw() {
+    const { map } = owners();
+    $("parts").innerHTML = parts.map((recs, p) => `<div class="part"><h4>partition ${p} &middot; committed offset ${committed[p]}</h4>
+      <div class="recs">${recs.map((r, o) => `<span class="r${o < committed[p] ? " done" : ""}" style="--c:var(${COLORS[r.sym]})" title="offset ${o}, eventId ${r.id}">${o}:${r.sym}</span>`).join("")}</div>
+      <div class="who">read by consumer ${map[p] + 1}</div></div>`).join("");
+  }
+  function produce(sym) {
+    const p = partitionOf(sym);
+    parts[p].push({ sym, id: nextId++ });
+    say(`Produced trade ${sym} (eventId ${nextId - 1}): key "${sym}" hashes to partition ${p}, offset ${parts[p].length - 1}.`);
+    draw();
+  }
+  function poll(crashOne) {
+    const { map } = owners();
+    let any = false;
+    for (let p = 0; p < 3; p++) {
+      const from = committed[p], to = Math.min(parts[p].length, from + 3);
+      if (from >= to) continue;
+      any = true;
+      const ids = parts[p].slice(from, to).map(r => r.id).join(", ");
+      if (crashOne && !crashOne.done) {
+        crashOne.done = true;
+        say(`Consumer ${map[p] + 1} processed eventIds ${ids} from partition ${p}, then crashed BEFORE committing. Rebalance: the partition gets a new owner, which restarts at the committed offset ${from}. Those events will be delivered again; the idempotent consumer sees eventId <= last applied and skips them.`);
+        continue;
+      }
+      committed[p] = to;
+      say(`Consumer ${map[p] + 1} processed eventIds ${ids} from partition ${p} and committed offset ${to}.`);
+    }
+    if (!any) say("Nothing new to consume: every partition is read up to its end.");
+    draw();
+  }
+  document.querySelectorAll("[data-sym]").forEach(b => b.onclick = () => produce(b.dataset.sym));
+  $("burst").onclick = () => { for (let i = 0; i < 10; i++) produce(SYMS[Math.floor(Math.random() * SYMS.length)]); };
+  $("poll").onclick = () => poll(null);
+  $("crash").onclick = () => poll({ done: false });
+  $("members").onchange = () => {
+    const n = +$("members").value;
+    say(`Group now has ${n} consumer(s): rebalance. Each partition's new owner continues from its committed offset.` +
+      (n > 3 ? ` Consumer ${n} gets no partition: partitions cap a group's parallelism.` : ""));
+    draw();
+  };
+  $("reset").onclick = reset;
+  reset();
+})();
+</script>
+</body>
+</html>

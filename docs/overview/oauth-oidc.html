@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAuth2 and OIDC Explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Contents">
+  <a class="home" href="../learnings/README.md">&larr; Learnings</a>
+  <strong>Contents</strong>
+  <a href="#problem">1. The problem</a>
+  <a href="#hotel">2. A business example</a>
+  <a href="#roles">3. The four roles</a>
+  <a href="#flows">4. Flows</a>
+  <a href="#pkce">5. PKCE, step by step</a>
+  <a href="#jwt">6. Tokens (JWT)</a>
+  <a href="#decode">7. Decode a token</a>
+  <a href="#keycloak">8. Keycloak terms</a>
+  <a href="#prayog">9. In Prayog</a>
+  <a href="#faq">10. Questions</a>
+</nav>
+<main>
+<h1>OAuth2 and OpenID Connect, with Keycloak</h1>
+<p class="lede">How Prayog knows who is calling: a person in the web terminal or a bot running on someone's laptop. The gateway never sees a password. It checks a signed token issued by Keycloak. This page explains the flows, PKCE, what is inside a token and how the gateway will validate it.</p>
+
+<h2 id="problem">1. The problem</h2>
+<ul>
+  <li>Humans sign in through a browser; bots have no browser and no human.</li>
+  <li>The gateway must know <em>who</em> sent each order (to check ownership, roles and rate limits) on every request, quickly.</li>
+  <li>Handling passwords in every service is risky. One service should do it well; the others should trust its word.</li>
+</ul>
+<p>OAuth2 and OpenID Connect are the standard answer: a dedicated identity server (Keycloak) authenticates callers and issues short-lived, signed tokens that any service can verify on its own.</p>
+
+<h2 id="hotel">2. A business example: the hotel key card</h2>
+<ul>
+  <li><strong>Reception</strong> (Keycloak) checks your ID once and programs a key card.</li>
+  <li>The <strong>key card</strong> (access token) says which room and until when. It's encoded so it can't be forged.</li>
+  <li>The <strong>room door</strong> (the gateway) reads the card itself. It doesn't phone reception on every swipe.</li>
+  <li>The card <strong>expires</strong> at checkout; a lost card is only useful until then.</li>
+  <li>The hotel's cleaning robot (a bot) doesn't show a passport; it has a machine credential (client id + secret) and gets a card for its own floor.</li>
+</ul>
+
+<h2 id="roles">3. The four roles, and OAuth2 vs OIDC</h2>
+<div class="table-wrap"><table>
+  <tr><th>Role</th><th>In Prayog</th></tr>
+  <tr><td>Resource owner</td><td>The trader (or, for a bot, the bot's owner)</td></tr>
+  <tr><td>Client</td><td>The web terminal (<code>prayog-web</code>), a bot (<code>prayog-bot-demo</code>), the simulated traders (<code>prayog-agents</code>)</td></tr>
+  <tr><td>Authorization server</td><td>Keycloak, realm <code>prayog</code></td></tr>
+  <tr><td>Resource server</td><td>The gateway (<code>prayog-api</code>), from S10</td></tr>
+</table></div>
+<ul>
+  <li><strong>OAuth2</strong> is about <em>access</em>: a client gets an <strong>access token</strong> to call an API.</li>
+  <li><strong>OpenID Connect (OIDC)</strong> is a layer on top about <em>identity</em>: it adds the <strong>ID token</strong> (who signed in), standard claims (<code>sub</code>, <code>email</code>), a <code>/userinfo</code> endpoint and a <strong>discovery document</strong> at <code>/.well-known/openid-configuration</code> listing every endpoint and the signing keys.</li>
+</ul>
+
+<h2 id="flows">4. Flows (grant types)</h2>
+<div class="table-wrap"><table>
+  <tr><th>Flow</th><th>For</th><th>Status</th></tr>
+  <tr><td><strong>Authorization code + PKCE</strong></td><td>Apps with a user: browser apps, mobile, CLI with a browser</td><td>The recommended flow for any user sign-in</td></tr>
+  <tr><td><strong>Client credentials</strong></td><td>Machine to machine: bots, services</td><td>Standard; the client authenticates as itself</td></tr>
+  <tr><td>Refresh token</td><td>Getting a new access token without signing in again</td><td>Used with authorization code</td></tr>
+  <tr><td>Implicit</td><td>Old browser apps (token in the URL)</td><td>Deprecated: tokens leak through history and logs</td></tr>
+  <tr><td>Resource owner password</td><td>The app collects the user's password itself</td><td>Deprecated: defeats the point of a separate identity server</td></tr>
+</table></div>
+<p>Prayog's realm enables exactly two: authorization code + PKCE for <code>prayog-web</code>, client credentials for the bots. Everything else is switched off per client.</p>
+
+<h2 id="pkce">5. PKCE, step by step</h2>
+<p>A browser app is a <strong>public client</strong>: its code is downloaded by everyone, so it can't keep a secret. Without one, anyone who intercepts the one-time <em>authorization code</em> (a malicious browser extension, a leaked redirect) could swap it for tokens. PKCE (Proof Key for Code Exchange, RFC 7636) fixes that:</p>
+<ol class="steps">
+  <li>The app makes a random <strong>code verifier</strong> and keeps it in memory.</li>
+  <li>It sends the user to Keycloak with only the <strong>code challenge</strong> = base64url(SHA-256(verifier)).</li>
+  <li>The user signs in; Keycloak redirects back with an authorization code and remembers the challenge.</li>
+  <li>The app exchanges the code for tokens, sending the <strong>verifier</strong>. Keycloak hashes it and compares it with the challenge.</li>
+  <li>A thief with only the code can't produce the verifier, because the hash can't be reversed.</li>
+</ol>
+<div class="sim">
+  <div class="controls"><button class="primary" id="newVerifier">New verifier</button></div>
+  <label>code verifier (kept secret in the app) <input id="verifier" style="width:100%"></label>
+  <div class="out" id="challenge" style="margin-top:10px"></div>
+</div>
+
+<h2 id="jwt">6. Tokens: JSON Web Tokens</h2>
+<p>Keycloak's access tokens are JWTs: three base64url parts joined by dots, <code>header.payload.signature</code>.</p>
+<div class="table-wrap"><table>
+  <tr><th>Part</th><th>Holds</th></tr>
+  <tr><td>Header</td><td>Algorithm (<code>RS256</code>: RSA signature with SHA-256) and <code>kid</code>, which of Keycloak's keys signed it</td></tr>
+  <tr><td>Payload</td><td>Claims: <code>iss</code> issuer, <code>sub</code> subject, <code>aud</code> audience, <code>exp</code>/<code>iat</code> expiry and issue time, <code>azp</code> the client that asked, <code>realm_access.roles</code></td></tr>
+  <tr><td>Signature</td><td>Keycloak's private-key signature over header and payload. Anyone can <em>read</em> a JWT; only Keycloak can <em>make</em> one.</td></tr>
+</table></div>
+<p>The gateway validates every token locally, with no call to Keycloak per request:</p>
+<ol class="steps">
+  <li>Fetch Keycloak's public keys once from the JWKS endpoint (listed in the discovery document) and cache them.</li>
+  <li>Check the signature with the key named by <code>kid</code>.</li>
+  <li>Check <code>iss</code> is exactly <code>http://auth.prayog.localhost/realms/prayog</code>.</li>
+  <li>Check <code>aud</code> contains <code>prayog-api</code>, so a token minted for some other app is refused.</li>
+  <li>Check <code>exp</code> is in the future (with a small allowance for clock skew).</li>
+  <li>Map roles (<code>trader</code>, <code>ops</code>, <code>bot</code>) to permissions, and <code>sub</code> to a Prayog account.</li>
+</ol>
+<div class="warn">A JWT's payload is encoded, not encrypted. Never put secrets in claims, and never trust a token you haven't checked the signature of.</div>
+
+<h2 id="decode">7. Decode a token</h2>
+<p>Get a real one from your running stack:</p>
+<pre><code>source .env && curl -s -d grant_type=client_credentials -d client_id=prayog-bot-demo \
+  -d client_secret="$PRAYOG_BOT_DEMO_SECRET" \
+  http://auth.prayog.localhost/realms/prayog/protocol/openid-connect/token | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'</code></pre>
+<p>Paste it below. Decoding happens in your browser only; the page sends nothing anywhere. It checks the claims the gateway will check (not the signature, which needs Keycloak's public key).</p>
+<div class="sim">
+  <textarea id="token" aria-label="JWT" placeholder="eyJhbGciOi..."></textarea>
+  <div id="decoded" style="margin-top:10px"></div>
+</div>
+
+<h2 id="keycloak">8. Keycloak's terms</h2>
+<div class="table-wrap"><table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Realm</td><td>An isolated set of users, clients and roles. <code>master</code> is for Keycloak's own admins; Prayog uses <code>prayog</code>.</td></tr>
+  <tr><td>Client</td><td>An application registered with the realm: its allowed flows, redirect URIs and (if confidential) its secret</td></tr>
+  <tr><td>Public / confidential</td><td>Can't / can keep a secret. Browser apps are public; bots and servers are confidential.</td></tr>
+  <tr><td>Service account</td><td>The user that a confidential client acts as in client credentials. Prayog gives bot service accounts the <code>bot</code> role.</td></tr>
+  <tr><td>Realm role</td><td>A role valid across the realm (<code>trader</code>, <code>ops</code>, <code>bot</code>), placed in <code>realm_access.roles</code></td></tr>
+  <tr><td>Protocol mapper</td><td>Adds or shapes claims. Prayog's audience mapper adds <code>prayog-api</code> to <code>aud</code>.</td></tr>
+  <tr><td>Realm import</td><td>A JSON file loaded at start-up. Prayog's has <code>${...}</code> placeholders filled from <code>.env</code>, and is imported only if the realm doesn't exist yet.</td></tr>
+</table></div>
+
+<h2 id="prayog">9. In Prayog</h2>
+<div class="table-wrap"><table>
+  <tr><th>Client</th><th>Type</th><th>Flow</th><th>Who</th></tr>
+  <tr><td><code>prayog-web</code></td><td>Public</td><td>Authorization code + PKCE (S256), redirects only to <code>app.prayog.localhost</code></td><td>People in the web terminal (S18)</td></tr>
+  <tr><td><code>prayog-api</code></td><td>No flows</td><td>None: it's the audience</td><td>The gateway (S10)</td></tr>
+  <tr><td><code>prayog-bot-demo</code></td><td>Confidential</td><td>Client credentials</td><td>The sample bot (S12); "API key" = client id + secret</td></tr>
+  <tr><td><code>prayog-agents</code></td><td>Confidential</td><td>Client credentials</td><td>Simulated traders (S13)</td></tr>
+</table></div>
+<p><code>make smoke</code> already proves the important parts: the issuer, a client-credentials token with <code>aud: prayog-api</code> and role <code>bot</code>, a 401 for a wrong secret, the users' roles and PKCE on the web client.</p>
+
+<h2 id="faq">10. Questions</h2>
+<h3>If tokens are checked locally, how do you log someone out or block a bot?</h3>
+<p>Keep access tokens short-lived (Prayog: 5 minutes). Disabling the user or client in Keycloak stops new tokens; the old one expires soon after. For an instant stop, Prayog also has its own kill switch: ops can disable the account inside the exchange (S6).</p>
+<h3>Why not simple API keys for bots?</h3>
+<p>A client id + secret <em>is</em> an API key, but exchanged for a short-lived token. The secret travels only to Keycloak, and the gateway checks one kind of credential for humans and bots alike.</p>
+<h3>Where should a browser app keep tokens?</h3>
+<p>In memory, ideally, with a refresh token handled carefully. Local storage is readable by any script on the page, so a single XSS bug would leak tokens. Prayog's web app (S18) uses <code>oidc-client-ts</code>, which follows these practices.</p>
+
+<footer>Prayog learning pages &middot; S2 &middot; Public sources: RFC 6749 (OAuth 2.0), RFC 7636 (PKCE), RFC 7519 (JWT), OpenID Connect Core 1.0, OAuth 2.0 Security Best Current Practice, Keycloak documentation. Related: <a href="compose-traefik.html">Compose and Traefik</a>.</footer>
+</main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  function newVerifier() { const b = new Uint8Array(32); crypto.getRandomValues(b); $("verifier").value = b64url(b); challenge(); }
+  async function challenge() {
+    const v = $("verifier").value;
+    if (!crypto.subtle) { $("challenge").textContent = "This browser blocks crypto.subtle here; open the page from localhost or a file."; return; }
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)));
+    $("challenge").textContent = [
+      `code_challenge        = ${b64url(hash)}`,
+      `code_challenge_method = S256`,
+      ``,
+      `Step 2 sends only the challenge. Step 4 sends the verifier; Keycloak recomputes the hash and compares.`,
+      `Change one character of the verifier and the challenge changes completely.`].join("\n");
+  }
+  $("newVerifier").onclick = newVerifier;
+  $("verifier").addEventListener("input", challenge);
+  newVerifier();
+
+  const ISS = "http://auth.prayog.localhost/realms/prayog";
+  const decodePart = s => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "=")))));
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  function decode() {
+    const t = $("token").value.trim(), out = $("decoded");
+    if (!t) { out.innerHTML = '<p class="muted" style="color:var(--muted)">Paste a token to see its parts.</p>'; return; }
+    const parts = t.split(".");
+    if (parts.length !== 3) { out.innerHTML = '<p class="bad">A JWT has three dot-separated parts.</p>'; return; }
+    let header, payload;
+    try { header = decodePart(parts[0]); payload = decodePart(parts[1]); } catch { out.innerHTML = '<p class="bad">Not valid base64url JSON.</p>'; return; }
+    const now = Math.floor(Date.now() / 1000);
+    const aud = [].concat(payload.aud || []);
+    const roles = payload.realm_access?.roles || [];
+    const row = (ok, text) => `<li><span class="${ok ? "good" : "bad"}">${ok ? "ok" : "no"}</span> ${text}</li>`;
+    out.innerHTML = `<ul style="list-style:none;padding:0">
+        ${row(header.alg === "RS256", `alg ${esc(header.alg)} (signature itself not checked here)`)}
+        ${row(payload.iss === ISS, `iss ${esc(payload.iss)}`)}
+        ${row(aud.includes("prayog-api"), `aud ${esc(aud.join(", ") || "(none)")}`)}
+        ${row(payload.exp > now, `exp ${payload.exp ? new Date(payload.exp * 1000).toLocaleString() : "(none)"}${payload.exp > now ? `, ${payload.exp - now} s left` : ", expired"}`)}
+        ${row(roles.some(r => ["trader", "ops", "bot"].includes(r)), `roles ${esc(roles.join(", ") || "(none)")}`)}
+        <li>azp (client) ${esc(payload.azp || "")}, sub ${esc(payload.sub || "")}</li></ul>
+      <div class="out">${esc(JSON.stringify(header, null, 2))}\n\n${esc(JSON.stringify(payload, null, 2))}</div>`;
+  }
+  $("token").addEventListener("input", decode);
+  decode();
+})();
+</script>
+</body>
+</html>
