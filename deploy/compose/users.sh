@@ -50,3 +50,9 @@ echo "Keycloak realm prayog: roles and users"
 ensure_role admin "Admin console: self-test, simulation control, accounts, journal replay"
 ensure_user admin1 Admin One "$PRAYOG_ADMIN1_PASSWORD" trader ops admin
 echo "  admin1 ready (roles trader, ops, admin)"
+
+# An optional personal admin, named in .env only (PRAYOG_EXTRA_ADMIN_USER and PRAYOG_EXTRA_ADMIN_PASSWORD).
+if [ -n "${PRAYOG_EXTRA_ADMIN_USER:-}" ] && [ -n "${PRAYOG_EXTRA_ADMIN_PASSWORD:-}" ]; then
+  ensure_user "$PRAYOG_EXTRA_ADMIN_USER" Admin "$PRAYOG_EXTRA_ADMIN_USER" "$PRAYOG_EXTRA_ADMIN_PASSWORD" trader ops admin
+  echo "  $PRAYOG_EXTRA_ADMIN_USER ready (roles trader, ops, admin)"
+fi
