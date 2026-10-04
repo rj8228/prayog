@@ -1,55 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../api/rest'
-import type { Fill, Me, OpenOrder } from '../api/types'
 import { withToken } from '../auth/auth'
 import { useAuth } from '../auth/useAuth'
-import { startPrivateFeed } from '../market/feed'
+import { useAppSelector } from '../hooks'
+import { rupees } from '../market/format'
 import { orderLatencyMs } from '../market/latency'
+import { useWorkspace } from '../workspace/WorkspaceContext'
 import { JourneyDialog } from './JourneyDialog'
-import { rupees, simClock } from '../market/format'
 
-/** The signed-in account: open orders (cancel buttons) and fills, live from the private feed. */
-export function MyOrders({ refresh }: { refresh: number }) {
+/** The signed-in account's open orders, as the exchange reports them (kept live by useAccountFeed). */
+export function MyOrders() {
   const { token } = useAuth()
-  const [orders, setOrders] = useState<OpenOrder[]>([])
-  const [fills, setFills] = useState<Fill[]>([])
-  const [me, setMe] = useState<Me | null>(null)
+  const { placed } = useWorkspace()
+  const me = useAppSelector((s) => s.account.me)
+  const orders = useAppSelector((s) => s.account.openOrders)
   const [journey, setJourney] = useState<number | null>(null)
 
-  // Bumped by the private feed and by cancels: refetch open orders.
-  const [version, setVersion] = useState(0)
-  const reload = () => setVersion((v) => v + 1)
-
-  useEffect(() => {
-    if (!token) return
-    void withToken(api.me).then(setMe)
-    return startPrivateFeed(token, (m) => {
-      const message = m as { type: string }
-      if (message.type === 'fill')
-        setFills((f) => [m as Fill, ...f].slice(0, 50))
-      if (message.type === 'fill' || message.type === 'order')
-        setVersion((v) => v + 1)
-    })
-  }, [token])
-
-  useEffect(() => {
-    if (!token) return
-    let active = true
-    const fetchOrders = () =>
-      withToken(api.openOrders)
-        .then((o) => {
-          if (active) setOrders(o)
-        })
-        .catch(() => undefined) // a lost session shows up as the sign-in prompt
-    void fetchOrders()
-    const timer = setInterval(() => void fetchOrders(), 5000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [token, refresh, version])
-
-  if (!token) return null
+  if (!token)
+    return (
+      <section className="panel">
+        <div className="panel-title">My orders</div>
+        <p className="muted">Sign in to see your orders.</p>
+      </section>
+    )
   return (
     <section className="panel mine">
       <div className="panel-title">
@@ -58,7 +31,7 @@ export function MyOrders({ refresh }: { refresh: number }) {
         {orders.length > 0 && (
           <button
             className="small"
-            onClick={() => void withToken(api.cancelAll).then(reload)}
+            onClick={() => void withToken(api.cancelAll).then(placed)}
           >
             Cancel all
           </button>
@@ -67,7 +40,7 @@ export function MyOrders({ refresh }: { refresh: number }) {
       {orders.length === 0 ? (
         <p className="muted">No open orders.</p>
       ) : (
-        <table>
+        <table className="compact">
           <thead>
             <tr>
               <th>id</th>
@@ -101,35 +74,13 @@ export function MyOrders({ refresh }: { refresh: number }) {
                     className="small"
                     onClick={() =>
                       void withToken((t) => api.cancel(t, o.orderId)).then(
-                        reload,
+                        placed,
                       )
                     }
                   >
                     Cancel
                   </button>
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <div className="panel-title">My fills</div>
-      {fills.length === 0 ? (
-        <p className="muted">No fills yet in this session.</p>
-      ) : (
-        <table>
-          <tbody>
-            {fills.map((f) => (
-              <tr
-                key={`${f.tradeId}-${f.orderId}`}
-                className="clickable"
-                onClick={() => setJourney(f.orderId)}
-              >
-                <td className="muted">{simClock(f.simTime)}</td>
-                <td>{f.symbol}</td>
-                <td className={f.side === 'BUY' ? 'up' : 'down'}>{f.side}</td>
-                <td>{f.quantity}</td>
-                <td className="px">{rupees(f.price)}</td>
               </tr>
             ))}
           </tbody>

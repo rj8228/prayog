@@ -1,22 +1,14 @@
 import { useState } from 'react'
 import { ApiError, api } from '../api/rest'
-import type { Side } from '../api/types'
 import { signIn, withToken } from '../auth/auth'
 import { useAuth } from '../auth/useAuth'
 import { rupees, toPaise } from '../market/format'
 import { orderLatencyMs } from '../market/latency'
+import { useWorkspace } from '../workspace/WorkspaceContext'
 
-export function OrderTicket({
-  symbol,
-  price,
-  onPlaced,
-}: {
-  symbol: string
-  price: number | null
-  onPlaced: () => void
-}) {
+export function OrderTicket() {
+  const { symbol, price, side, setSide, placed: onPlaced } = useWorkspace()
   const { token } = useAuth()
-  const [side, setSide] = useState<Side>('BUY')
   const [type, setType] = useState<'LIMIT' | 'MARKET'>('LIMIT')
   const [priceText, setPriceText] = useState('')
   const [quantity, setQuantity] = useState('10')
@@ -130,6 +122,7 @@ export function OrderTicket({
       <label>
         Quantity
         <input
+          id="ticket-quantity"
           inputMode="numeric"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}

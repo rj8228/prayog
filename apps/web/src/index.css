@@ -196,20 +196,6 @@ input {
   background: #142033;
 }
 
-.grid {
-  flex: 1;
-  display: grid;
-  gap: 12px;
-  padding: 12px 16px;
-  grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr) minmax(
-      220px,
-      0.8fr
-    );
-  grid-template-areas:
-    'chart ladder tape'
-    'ticket mine mine';
-}
-
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -227,14 +213,13 @@ input {
 }
 
 .chart {
-  grid-area: chart;
   display: flex;
   flex-direction: column;
 }
 
 .chart-area {
   flex: 1;
-  min-height: 360px;
+  min-height: 160px;
 }
 
 .intervals {
@@ -263,24 +248,19 @@ input {
 }
 
 .ladder {
-  grid-area: ladder;
 }
 
 .tape {
-  grid-area: tape;
-  max-height: 520px;
   overflow: hidden;
 }
 
 .ticket {
-  grid-area: ticket;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .mine {
-  grid-area: mine;
 }
 
 table {
@@ -413,24 +393,6 @@ label {
 .footer {
   padding: 8px 16px;
   font-size: 12px;
-}
-
-@media (max-width: 1100px) {
-  .grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'chart chart'
-      'ladder tape'
-      'ticket mine';
-  }
-}
-
-@media (max-width: 700px) {
-  .grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'chart' 'ladder' 'ticket' 'tape' 'mine';
-    padding: 12px;
-  }
 }
 
 /* ---- navigation, admin console, dialogs ---- */
@@ -626,5 +588,241 @@ tr.clickable:hover td {
 @media (max-width: 700px) {
   .replay-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- trading workspace: draggable, resizable panels ---- */
+.ws-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+}
+
+.ws-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-toolbar .hint {
+  font-size: 12px;
+}
+
+.ws-grid {
+  flex: 1;
+  padding: 0 4px;
+}
+
+.ws-item {
+  display: flex;
+}
+
+.ws-item > .panel {
+  flex: 1;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.ws-item .panel-title {
+  cursor: grab;
+  user-select: none;
+  padding-right: 64px; /* room for the panel's swap and close controls */
+}
+
+.react-grid-item.react-draggable-dragging .panel {
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: var(--accent);
+  opacity: 0.15;
+  border-radius: 10px;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-color: var(--muted);
+}
+
+.ws-chrome {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+
+.ws-item:hover .ws-chrome,
+.ws-chrome:focus-within {
+  opacity: 1;
+}
+
+.ws-chrome select,
+.ws-chrome button {
+  padding: 1px 6px;
+  font-size: 12px;
+  width: auto;
+}
+
+.ws-chrome select {
+  width: 28px;
+  appearance: none;
+  text-align: center;
+  cursor: pointer;
+}
+
+.explain {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: 45%;
+  overflow: auto;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #0f2742;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+}
+
+.explain a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.toggle {
+  display: inline-flex;
+  flex-direction: row;
+  white-space: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.toggle input {
+  width: auto;
+}
+
+.oneclick-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.oneclick-bar input[inputmode] {
+  width: 70px;
+}
+
+.oneclick-bar .toggle {
+  margin-left: 0;
+}
+
+.ladder tbody tr {
+  cursor: pointer;
+}
+
+table.compact td,
+table.compact th {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.selected-row {
+  background: #142033;
+}
+
+.spark {
+  width: 90px;
+  height: 22px;
+  display: block;
+}
+
+.depth {
+  width: 100%;
+  height: calc(100% - 64px);
+  min-height: 120px;
+  cursor: crosshair;
+}
+
+.depth .axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.small-print {
+  font-size: 11px;
+  margin: 6px 0 0;
+}
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+}
+
+.toast {
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast.buy {
+  border-left-color: var(--up);
+}
+
+.toast.sell {
+  border-left-color: var(--down);
+}
+
+.toast.error {
+  border-left-color: var(--down);
+  color: var(--down);
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .ws-toolbar .hint {
+    display: none;
   }
 }

@@ -1,28 +1,29 @@
 import { useEffect, useState } from 'react'
+import { shallowEqual } from 'react-redux'
+import { useAccountFeed } from './account/useAccountFeed'
 import { api } from './api/rest'
+import { useAuth } from './auth/useAuth'
 import { Header } from './components/Header'
-import { Ladder } from './components/Ladder'
-import { MyOrders } from './components/MyOrders'
-import { OrderTicket } from './components/OrderTicket'
-import { PriceChart } from './components/PriceChart'
 import { TickerBar } from './components/TickerBar'
-import { TradeTape } from './components/TradeTape'
+import { Toasts } from './components/Toasts'
 import { useAppDispatch, useAppSelector } from './hooks'
 import { startMarketFeed } from './market/feed'
 import { history } from './market/marketSlice'
 import { store } from './store'
+import { Workspace } from './workspace/Workspace'
 
 export function MarketPage() {
   const dispatch = useAppDispatch()
-  const symbols = useAppSelector((s) => Object.keys(s.market.books).sort())
+  const { token } = useAuth()
+  const symbols = useAppSelector(
+    (s) => Object.keys(s.market.books).sort(),
+    shallowEqual,
+  )
   const [selected, setSelected] = useState('INFY')
-  const [candleSeconds, setCandleSeconds] = useState(10)
-  const [clickedPrice, setClickedPrice] = useState<number | null>(null)
-  const [refresh, setRefresh] = useState(0)
-  const trades = useAppSelector((s) => s.market.books[selected]?.trades ?? [])
   const known = symbols.includes(selected)
 
   useEffect(() => startMarketFeed(dispatch, store.getState), [dispatch])
+  const refreshOrders = useAccountFeed(token)
 
   // Load more trade history for the chart when a symbol is first shown.
   useEffect(() => {
@@ -36,21 +37,12 @@ export function MarketPage() {
     <div className="app">
       <Header />
       <TickerBar selected={selected} onSelect={setSelected} />
-      <main className="grid">
-        <PriceChart
-          trades={trades}
-          interval={candleSeconds}
-          onInterval={setCandleSeconds}
-        />
-        <Ladder symbol={selected} onPrice={setClickedPrice} />
-        <TradeTape symbol={selected} />
-        <OrderTicket
-          symbol={selected}
-          price={clickedPrice}
-          onPlaced={() => setRefresh((r) => r + 1)}
-        />
-        <MyOrders refresh={refresh} />
-      </main>
+      <Workspace
+        symbol={selected}
+        setSymbol={setSelected}
+        onPlaced={refreshOrders}
+      />
+      <Toasts />
       <footer className="footer muted">
         Prices in ₹ (integer paise inside). Sim time in IST. Simulated market:
         no real money.
