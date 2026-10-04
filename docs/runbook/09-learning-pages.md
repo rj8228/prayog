@@ -1,6 +1,7 @@
 # 9. Learning pages
 
-Open any page with `open docs/overview/<name>.html` (they work offline).
+Open any page with `open docs/overview/<name>.html` (they work offline), or read them anywhere at
+https://rj8228.github.io/prayog/ (published by `.github/workflows/pages.yml` on every push that changes `docs/`).
 
 | Page | Topic | Try-it panel |
 |---|---|---|

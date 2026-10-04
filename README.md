@@ -9,7 +9,7 @@ Post-trade P&L, the leaderboard and the ops page are next. See [docs/PROGRESS.md
 - **Visit and trade:** [docs/guides/using-the-market.md](docs/guides/using-the-market.md)
 - **Build a trading bot:** [docs/bots/](docs/bots/README.md)
 - **Run, check and debug:** [docs/runbook/](docs/runbook/README.md)
-- **Learn how it works:** [docs/learnings/](docs/learnings/README.md)
+- **Learn how it works:** [docs/learnings/](docs/learnings/README.md); the interactive pages are also published at https://rj8228.github.io/prayog/
 
 ## Prerequisites
 

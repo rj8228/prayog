@@ -25,6 +25,7 @@ ADRs [0009](../adr/0009-exchange-service-gateway-market-data.md) and [0010](../a
 - [ ] **Never cross yourself.** Move the side stepping away from the market first, or self-trade prevention cancels your own quote.
 - [ ] **Reconcile.** Fills can beat the REST answer that names the order; the exchange's open-order list is the truth.
 - [ ] **Containers' small print.** `JAVA_TOOL_OPTIONS` rejects module flags (use `JDK_JAVA_OPTIONS`); the JRE image's `sh` is dash; Corepack prompts and hangs a build; orphaned containers keep router names.
+- [ ] **A started thread is not a running consumer.** Disruptor's shutdown drains only consumers already running; `start()` now waits for every handler's `onStart`. Found because CI's slower runners closed pipelines before their threads ran (261 of 300 local repeats then reproduced it).
 - [ ] **Environment can lie.** A sleeping Mac pauses everything and Docker's VM clock lags after wake; tokens then look expired. Measure before blaming code.
 - [ ] **End-to-end correctness, not just liveness.** `make e2e` compares feed-rebuilt books with REST snapshots at the same seq and replays the live journal.
 
