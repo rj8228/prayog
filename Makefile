@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help up down test test-java test-python test-web fmt lint build logs clean install
+.PHONY: help up down test test-java test-python test-web replay-check fmt lint build logs clean install
 
 MVNW := ./mvnw -B
 
@@ -32,6 +32,9 @@ test-web: ## Web: lint, typecheck, format check, tests
 	pnpm -r typecheck
 	pnpm -r fmt:check
 	pnpm -r test
+
+replay-check: ## Record a busy session, replay it, compare event-log checksums (S8)
+	$(MVNW) -pl services/exchange/exchange-core -am test -Dtest=ReplayDeterminismTest -Dsurefire.failIfNoSpecifiedTests=false
 
 fmt: ## Format Java, Python and web code
 	$(MVNW) -q spotless:apply

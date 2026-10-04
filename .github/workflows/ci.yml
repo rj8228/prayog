@@ -26,6 +26,21 @@ jobs:
       # verify = compile + unit tests (Surefire) + integration tests (Failsafe, Docker is available) + Spotless check
       - run: ./mvnw -B verify
 
+  replay-check:
+    name: Replay determinism check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Records a multi-threaded session through the pipeline, replays its input journal into a fresh engine and
+      # requires the same SHA-256 over the event log (BUILD_PLAN 16.1 #15). Also part of `verify`; a separate job
+      # makes a determinism break visible by name.
+      - run: make replay-check
+
   python:
     name: Python (uv)
     runs-on: ubuntu-latest
