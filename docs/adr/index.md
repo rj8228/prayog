@@ -16,5 +16,6 @@ decision is tested.
 | 0009 | [Exchange service: gateway, market data and recovery](0009-exchange-service-gateway-market-data.md) | 2026-10-04 |
 | 0010 | [Simulated traders, Python SDK and the web market page](0010-simulated-traders-sdk-and-web.md) | 2026-10-04 |
 | 0011 | [Admin console: admin user, self-test, live simulation control, journal views](0011-admin-console.md) | 2026-10-05 |
+| 0012 | [Trading workspace and browser strategies](0012-trading-workspace-and-strategies.md) | 2026-10-05 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.

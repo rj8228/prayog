@@ -26,8 +26,14 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [ ] S15 Kafka publisher (5 h)
 - [ ] S16 Post-trade service (7 h)
 - [ ] S17 Leaderboard (3 h)
-- [ ] S18 Trading terminal (8 h) — first slice done (market view, sign-in, order ticket, my orders and fills; ADR 0010); full terminal remains
+- [ ] S18 Trading terminal (8 h) — first slice done (ADR 0010); Step 1.5 added the draggable workspace, watchlist, depth chart, positions & P&L, one-click trading, shortcuts and explain mode (ADR 0012); remaining: server-backed blotter and P&L with S16/S19
 - [ ] S19 Blotter, P&L and ops page (6 h)
+
+## Step 1.5 (2026-10-05)
+- [x] Docs site: MkDocs Material on GitHub Pages, link-checked (commits f5deacd, 02d89e5)
+- [x] Admin user and console: self-test, simulation control, accounts, event replay, order journey — ADR 0011
+- [x] Trading workspace: drag, resize, swap, presets, new panels, one-click, shortcuts, explain mode — ADR 0012
+- [x] Strategies in the browser: six strategies with risk limits, own accounts, live P&L and logs — ADR 0012
 
 ## M4 Hardening layers
 - [ ] S9 Benchmarks (4 h)

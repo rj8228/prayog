@@ -124,6 +124,12 @@ and shutdown.
    `MarketMaker`). Background: `open docs/overview/market-making.html`.
 4. **Pairs or cross-symbol**: trade one symbol on another's moves.
 
+Before writing your own, try the six strategies in the web app's **Strategies** panel (TWAP, iceberg, grid, mean
+reversion, momentum, market maker; [user guide](../guides/using-the-market.md)). Each is a pure `decide(context)`
+function returning orders and cancels, plus a runner that applies risk checks, in
+[`apps/web/src/strategies`](https://github.com/rj8228/prayog/tree/main/apps/web/src/strategies). The same shape
+works for a Python bot: keep the decision pure and testable, and put risk checks and I/O around it.
+
 The simulated market's fair value is a mean-reverting random walk with jumps (`AGENTS_SCENARIO=calm` or
 `volatile` in `.env`, then `make up`). Mean reversion is a real edge here; momentum works in bursts.
 

@@ -33,6 +33,24 @@ Open **http://app.prayog.localhost** in Chrome or Firefox. No login is needed to
 The simulated traders keep the market busy: the market maker always quotes both sides around a hidden "fair
 value" that drifts and occasionally jumps, and other traders buy and sell against it.
 
+### Arrange your workspace
+
+Every box on the page is a panel you can move and size:
+
+- **Move:** drag a panel by its title. Other panels make room.
+- **Resize:** drag its bottom-right corner.
+- **Swap two panels:** the **⇄** menu at a panel's top right; they trade places and sizes.
+- **Add or remove:** **+ Add panel** in the toolbar (watchlist, depth chart, positions & P&L, my fills,
+  strategies, ...) and **×** on a panel.
+- **Presets:** **Trader**, **Scalper** (tall order book for one-click trading), **Watcher** (no trading) and
+  **Quant** (strategies). Your own arrangement is kept as **Custom (saved)**, per user, in this browser.
+- **Lock** stops accidental drags. **Explain** puts a short note on every panel saying what it shows and how it
+  works, with a link to the matching docs page.
+- **Shortcuts** (press `?`): `B` / `S` buy or sell (jumps to quantity), `[` `]` previous or next symbol, `X` cancel
+  all your orders, `E` explain mode, `L` lock.
+
+On a phone the panels stack in one column.
+
 ## 3. Sign in
 
 Click **Sign in to trade**. You land on Keycloak's login page. Use one of the seeded users:
@@ -61,7 +79,17 @@ tokens renew themselves every few minutes.
 | `rejected (PRICE_OUTSIDE_BAND)` | Refused: price outside today's ±10% band. Other reasons: `PRICE_NOT_ON_TICK` (prices move in ₹0.05 steps), `SESSION_NOT_OPEN`, `INVALID_QUANTITY` |
 
 **My orders** lists your open orders with a **Cancel** button (and **Cancel all**). **My fills** shows each of your
-trades the moment it happens, including resting orders that fill later.
+trades the moment it happens, including resting orders that fill later; a notification pops up at the bottom right
+too. Click an order id or a fill to see the order's journey through the exchange.
+
+**Positions & P&L** adds up your fills per symbol (average-cost method): shares held, average price, realized P&L
+from shares you closed and unrealized P&L at the last price. It counts this browser session's fills; the official
+numbers come with the post-trade service (Step 2).
+
+### One-click trading
+
+Tick **1-click** in the order book. A click on an ask (red) then **buys** that quantity at that price, a click on a
+bid (green) **sells**. Keep **confirm** ticked until you are used to it.
 
 ## 5. Rules worth knowing
 
@@ -86,14 +114,37 @@ uv run prayog cancel-all
 uv run prayog watch INFY            # live order book in the terminal (Ctrl-C to stop)
 ```
 
-## 7. Admin console
+## 7. Run a strategy
+
+Choose the **Quant** layout (or add the **Strategies** panel). Pick one of six textbook strategies, set its
+parameters and risk limits, and press **Start**:
+
+| Strategy | Does | Try |
+|---|---|---|
+| TWAP | Buys or sells a total in equal slices over a time, crossing the spread for each | 200 shares over 5 minutes |
+| Iceberg | Shows only a small part of a large order, refilling as it trades | 300 total, 20 visible |
+| Grid | Resting buys below and sells above a centre price at fixed steps | ₹1 step, 3 levels |
+| Mean reversion | Buys when the price is unusually far below its recent average, sells when far above | Works well here: the simulated fair value mean-reverts |
+| Momentum | Long while a fast average is above a slow one, short while below | Works in bursts; try the volatile scenario |
+| Market maker | Quotes both sides around the mid, leaning against its inventory | Compete with the simulated market maker |
+
+Each strategy trades in **its own account** (`algo-<strategy>-<symbol>`), so its orders and P&L never mix with
+yours. Before every order it checks the **risk limits**: order size, worst-case position (as if all its open orders
+filled), distance from the last price and orders per minute; refused orders are logged, not sent. At the **loss
+limit** it stops and cancels its orders. Its card shows P&L with a sparkline, position, orders and fills, and a log
+of every decision.
+
+Strategies run in this tab once a second. **Stop** or **Stop all** cancels their orders; so does closing the tab.
+The code is short on purpose: `apps/web/src/strategies/library.ts`.
+
+## 8. Admin console
 
 Sign in as **admin1** (`grep PRAYOG_ADMIN1_PASSWORD .env`) and open the **Admin** tab: halt or open the market,
 change the clock speed, switch the simulated traders between calm and volatile, inject a "news" price jump, run the
 self-test with one click, manage accounts and replay the last minutes of any symbol from the journal. Details:
 [runbook 13](../runbook/13-admin-console.md).
 
-## 8. Stop
+## 9. Stop
 
 ```sh
 make down    # stops everything, keeps the market's history
