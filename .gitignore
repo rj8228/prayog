@@ -34,3 +34,6 @@ data/
 
 # Docs site build output
 site/
+
+# Browser-automation scratch output
+.playwright-mcp/
