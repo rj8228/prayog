@@ -86,7 +86,14 @@ uv run prayog cancel-all
 uv run prayog watch INFY            # live order book in the terminal (Ctrl-C to stop)
 ```
 
-## 7. Stop
+## 7. Admin console
+
+Sign in as **admin1** (`grep PRAYOG_ADMIN1_PASSWORD .env`) and open the **Admin** tab: halt or open the market,
+change the clock speed, switch the simulated traders between calm and volatile, inject a "news" price jump, run the
+self-test with one click, manage accounts and replay the last minutes of any symbol from the journal. Details:
+[runbook 13](../runbook/13-admin-console.md).
+
+## 8. Stop
 
 ```sh
 make down    # stops everything, keeps the market's history

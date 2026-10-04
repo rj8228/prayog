@@ -20,6 +20,7 @@ simulated traders, web app). Every command and expectation was run against the l
 | 10 | [Trading as a user](10-trading-as-a-user.md) | Watch the market, sign in, place and cancel orders |
 | 11 | [Bots](11-bots.md) | Check the simulated traders and the sample bot; switch scenarios |
 | 12 | [Exchange internals](12-exchange-internals.md) | Readiness, metrics, rejected orders, recovery, live journal replay |
+| 13 | [Admin console](13-admin-console.md) | Market and simulation control, self-test, accounts, event replay |
 
 ## Addresses
 

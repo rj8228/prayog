@@ -5,7 +5,8 @@ from disk with `open docs/overview/<name>.html`. Their links to Markdown files (
 `../learnings/README.md`) only make sense on disk. After the build, this hook rewrites those links
 in the copies under site/ (never the sources):
 
-- a link to a Markdown page becomes the page's site URL (`../learnings/README.md` -> `../learnings/`);
+- a link to a Markdown page becomes the page's site URL (`../learnings/README.md` ->
+`../learnings/`);
 - a link that climbs out of docs/ (a repository file) becomes a github.com URL.
 """
 

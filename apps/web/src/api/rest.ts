@@ -124,7 +124,7 @@ export const adminApi = {
     call<unknown>('/ops/clock/next-open', post(), token),
   replay: (token: string, symbol: string, minutes: number) =>
     call<ReplayWindow>(
-      `/admin/replay?symbol=${symbol}&minutes=${minutes}`,
+      `/admin/replay?symbol=${symbol}&minutes=${minutes}&maxFrames=20000`,
       {},
       token,
     ),
