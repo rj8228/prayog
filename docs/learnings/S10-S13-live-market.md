@@ -39,4 +39,23 @@ ADRs [0009](../adr/0009-exchange-service-gateway-market-data.md) and [0010](../a
 
 ## Explain-back answers
 
-To be added after the explain-back discussion for these sessions (see the handoff).
+1. **Why does the HTTP answer come from the stage after the journal, and how does it find its caller?** Stages run matching → journal → outbound, so whatever outbound says is already on disk; a client is never told about a trade a crash could erase. The gateway attaches the pending HTTP response to the ring slot as a *context* (never journaled, never seen by the engine); the outbound stage completes it with exactly that command's events. Completing a future runs its continuations on the completing thread, so the gateway hops to a worker pool (`publishOn`); otherwise the pipeline thread would build every response.
+2. **What happens on restart?** The input journal is replayed into a fresh engine: same resting orders, queue positions and next ids. Events missing from the event log (a crash between the two flushes) are appended; the market-data view is rebuilt from the same replayed events; the pipeline continues at the next input sequence; the journal's setup wins over current config. Proved by the API test that restarts and finds its open orders, and by `make e2e` replaying the live journal (~110k commands) to the identical checksum.
+3. **Why derive market data from events instead of reading the engine's book?** The engine belongs to one thread; reading it elsewhere would need locks on the order path. `OrderTracker` rebuilds depth from events and publishes only between commands (an incoming order passes through states that never existed). A property test (60 sessions × 600 commands) checks it equals the engine's book after every command; `make e2e` checks feed-rebuilt books equal REST snapshots at the same `seq`.
+4. **How does a client know its book is right?** Every per-symbol message has `seq` exactly one higher than the last. Snapshot and subscription happen under the same lock as publishing, so the snapshot and the first delta are consecutive. A jump in `seq` means resubscribe for a fresh snapshot (`SequenceGap` in the SDK, "resyncing" in the web app). A client more than 10,000 messages behind is disconnected rather than slowing everyone.
+5. **What makes the market maker work, and what broke it?** It earns the spread, controls inventory with skew and a cap, and widens the spread to cover informed flow. Two traps found live: moving bids up before asks crossed its own quotes (self-trade prevention cancelled them 798 times), fixed by moving the away-side first; and fills arriving before the response that names the order, fixed by reconciling against the exchange's open orders every 2 s.
+
+## Lessons from running it for real
+
+| Found by | Problem | Fix |
+|---|---|---|
+| Live run, metrics | Market maker self-crossing, one-sided book | Move away-side quotes first; skip quotes that would reach own orders |
+| Live run, ladder | Ghost orders after early fills | Reconcile with `GET /orders` every 2 s |
+| CI (slower runners) | Pipeline closed before consumer threads ran lost queued commands (261/300 locally once reproduced) | `start()` waits for every handler's `onStart` |
+| Log thread name | Responses built on the outbound pipeline thread | `publishOn(Schedulers.parallel())` |
+| Container start | `JAVA_TOOL_OPTIONS` rejects `--add-exports`; JRE image `sh` is dash | `JDK_JAVA_OPTIONS`; health check under `bash` |
+| Hung image build | Corepack download prompt | `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` |
+| 404 on `api.` | Orphaned container still claiming the router name | `make up --remove-orphans` |
+| CI only | Older Compose fails `up --wait` on a finished one-shot | `service_completed_successfully` dependency |
+| Browser 401s | Mac slept; Docker VM clock lagged; tokens minted already old | Renew once on 401; runbook note; `caffeinate` for long runs |
+| My own commit | `cmd \| tail` hid a failing pytest exit code; committed red | Commit only when the test command itself exits 0 |
