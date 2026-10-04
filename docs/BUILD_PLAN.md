@@ -156,7 +156,7 @@ prayog/
 
 **Defaults to confirm before Session S1:** Java and Spring Boot versions; Maven layout (parent POM, module names, Maven Wrapper); jOOQ and Flyway setup; Disruptor configuration (ring size, wait strategy); journal format; gateway transport; message format and schema location; Keycloak realm and clients; Traefik subdomains and ports; Python tooling (uv, Ruff, pytest); web tooling (pnpm, Vite, Redux Toolkit, charting library); folder layout; Makefile targets; CI steps.
 
-**Approved dependency list (ask before adding others):** Spring Boot starters (web, webflux, actuator, security, oauth2-resource-server), jOOQ, Flyway, PostgreSQL driver, spring-kafka, Lettuce (Redis), LMAX Disruptor, Agrona (optional), Micrometer + Prometheus registry, JUnit 5, jqwik, Testcontainers, JMH, HdrHistogram, Cucumber-JVM; Python: websockets or httpx, pydantic, numpy, pytest, ruff; Web: react, redux toolkit, react-router, a charting library (ask first).
+**Approved dependency list (ask before adding others):** Spring Boot starters (web, webflux, actuator, security, oauth2-resource-server), jOOQ, Flyway, PostgreSQL driver, spring-kafka, Lettuce (Redis), LMAX Disruptor, Agrona, SBE (Simple Binary Encoding: sbe-tool at build time, for the journal codec; approved 2026-10-04), Micrometer + Prometheus registry, JUnit 5, jqwik, Testcontainers, JMH, HdrHistogram, Cucumber-JVM; Python: websockets or httpx, pydantic, numpy, pytest, ruff; Web: react, redux toolkit, react-router, a charting library (ask first).
 
 ## 9. Session prompt template
 

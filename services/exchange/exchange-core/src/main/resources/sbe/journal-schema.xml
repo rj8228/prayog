@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Binary layout of every journal record (ADR 0007). SBE generates Java encoders/decoders from this file at build time.
+
+  Rules that keep the bytes stable (the replay checksum depends on them):
+  - Never renumber a message id or an enum value, never reorder fields. Add new fields at the end of a message and
+    bump the schema version.
+  - Enum values are written by explicit number, not by the Java enum's ordinal, so reordering a Java enum cannot
+    change the bytes.
+  - Fixed-size fields come first, then repeating groups, then variable-length strings, in the order listed; SBE
+    requires that order, and decoders must read the strings in it.
+  - Little-endian, as SBE recommends: it matches x86 and ARM, so no byte swapping.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="dev.prayog.exchange.core.journal.sbe"
+                   id="1"
+                   version="0"
+                   semanticVersion="0.1"
+                   description="Prayog input journal and event log"
+                   byteOrder="littleEndian">
+    <types>
+        <composite name="messageHeader" description="Starts every message: which message it is and how long its fixed part is">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <composite name="groupSizeEncoding" description="Starts a repeating group">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="numInGroup" primitiveType="uint16"/>
+        </composite>
+        <composite name="varStringEncoding" description="A UTF-8 string: length, then bytes">
+            <type name="length" primitiveType="uint32" maxValue="1073741824"/>
+            <type name="varData" primitiveType="uint8" length="0" characterEncoding="UTF-8"/>
+        </composite>
+
+        <!-- "Code" suffix: these mirror the enums in contracts without clashing with their names. -->
+        <enum name="SideCode" encodingType="uint8">
+            <validValue name="BUY">0</validValue>
+            <validValue name="SELL">1</validValue>
+        </enum>
+        <enum name="OrderTypeCode" encodingType="uint8">
+            <validValue name="LIMIT">0</validValue>
+            <validValue name="MARKET">1</validValue>
+        </enum>
+        <enum name="SessionStateCode" encodingType="uint8">
+            <validValue name="CLOSED">0</validValue>
+            <validValue name="OPEN">1</validValue>
+            <validValue name="HALTED">2</validValue>
+        </enum>
+        <enum name="CancelReasonCode" encodingType="uint8">
+            <validValue name="CLIENT_REQUEST">0</validValue>
+            <validValue name="SELF_TRADE_PREVENTION">1</validValue>
+            <validValue name="NO_LIQUIDITY">2</validValue>
+            <validValue name="MODIFIED_TO_ZERO">3</validValue>
+            <validValue name="KILL_SWITCH">4</validValue>
+            <validValue name="EXPIRED">5</validValue>
+        </enum>
+        <enum name="RejectReasonCode" encodingType="uint8">
+            <validValue name="UNKNOWN_SYMBOL">0</validValue>
+            <validValue name="INVALID_PRICE">1</validValue>
+            <validValue name="INVALID_QUANTITY">2</validValue>
+            <validValue name="PRICE_NOT_ON_TICK">3</validValue>
+            <validValue name="PRICE_OUTSIDE_BAND">4</validValue>
+            <validValue name="SESSION_NOT_OPEN">5</validValue>
+            <validValue name="UNKNOWN_ORDER">6</validValue>
+            <validValue name="DUPLICATE_CLIENT_ORDER_ID">7</validValue>
+            <validValue name="RATE_LIMITED">8</validValue>
+            <validValue name="ACCOUNT_DISABLED">9</validValue>
+        </enum>
+        <enum name="BooleanCode" encodingType="uint8">
+            <validValue name="FALSE">0</validValue>
+            <validValue name="TRUE">1</validValue>
+        </enum>
+    </types>
+
+    <!-- Commands (input journal), ids 1-19 -->
+    <sbe:message name="NewOrder" id="1">
+        <field name="accountId" id="1" type="int64"/>
+        <field name="side" id="2" type="SideCode"/>
+        <field name="orderType" id="3" type="OrderTypeCode"/>
+        <field name="price" id="4" type="int64"/>
+        <field name="quantity" id="5" type="int64"/>
+        <data name="clientOrderId" id="6" type="varStringEncoding"/>
+        <data name="symbol" id="7" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="CancelOrder" id="2">
+        <field name="accountId" id="1" type="int64"/>
+        <field name="orderId" id="2" type="int64"/>
+        <data name="clientOrderId" id="3" type="varStringEncoding"/>
+        <data name="symbol" id="4" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="ModifyOrder" id="3">
+        <field name="accountId" id="1" type="int64"/>
+        <field name="orderId" id="2" type="int64"/>
+        <field name="price" id="3" type="int64"/>
+        <field name="quantity" id="4" type="int64"/>
+        <data name="clientOrderId" id="5" type="varStringEncoding"/>
+        <data name="symbol" id="6" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="ClockTick" id="4">
+        <field name="simTime" id="1" type="int64"/>
+    </sbe:message>
+    <sbe:message name="SetSessionState" id="5">
+        <field name="state" id="1" type="SessionStateCode"/>
+    </sbe:message>
+    <sbe:message name="SetAccountEnabled" id="6">
+        <field name="accountId" id="1" type="int64"/>
+        <field name="enabled" id="2" type="BooleanCode"/>
+    </sbe:message>
+
+    <!-- Events (event log), ids 20-39 -->
+    <sbe:message name="OrderAccepted" id="20">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="orderId" id="3" type="int64"/>
+        <field name="accountId" id="4" type="int64"/>
+        <field name="side" id="5" type="SideCode"/>
+        <field name="orderType" id="6" type="OrderTypeCode"/>
+        <field name="price" id="7" type="int64"/>
+        <field name="quantity" id="8" type="int64"/>
+        <data name="clientOrderId" id="9" type="varStringEncoding"/>
+        <data name="symbol" id="10" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="OrderRejected" id="21">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="orderId" id="3" type="int64"/>
+        <field name="accountId" id="4" type="int64"/>
+        <field name="reason" id="5" type="RejectReasonCode"/>
+        <data name="clientOrderId" id="6" type="varStringEncoding"/>
+        <data name="symbol" id="7" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="OrderCancelled" id="22">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="orderId" id="3" type="int64"/>
+        <field name="accountId" id="4" type="int64"/>
+        <field name="cancelledQuantity" id="5" type="int64"/>
+        <field name="reason" id="6" type="CancelReasonCode"/>
+        <data name="symbol" id="7" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="OrderModified" id="23">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="orderId" id="3" type="int64"/>
+        <field name="accountId" id="4" type="int64"/>
+        <field name="price" id="5" type="int64"/>
+        <field name="quantity" id="6" type="int64"/>
+        <field name="leavesQuantity" id="7" type="int64"/>
+        <data name="symbol" id="8" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="Trade" id="24">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="tradeId" id="3" type="int64"/>
+        <field name="price" id="4" type="int64"/>
+        <field name="quantity" id="5" type="int64"/>
+        <field name="aggressorSide" id="6" type="SideCode"/>
+        <field name="buyOrderId" id="7" type="int64"/>
+        <field name="sellOrderId" id="8" type="int64"/>
+        <field name="buyAccountId" id="9" type="int64"/>
+        <field name="sellAccountId" id="10" type="int64"/>
+        <data name="symbol" id="11" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="BookUpdate" id="25">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="side" id="3" type="SideCode"/>
+        <field name="price" id="4" type="int64"/>
+        <field name="quantity" id="5" type="int64"/>
+        <field name="orderCount" id="6" type="int32"/>
+        <data name="symbol" id="7" type="varStringEncoding"/>
+    </sbe:message>
+    <sbe:message name="SessionStateChanged" id="26">
+        <field name="seq" id="1" type="int64"/>
+        <field name="simTime" id="2" type="int64"/>
+        <field name="state" id="3" type="SessionStateCode"/>
+    </sbe:message>
+
+    <!-- Journal metadata, ids 40+ -->
+    <sbe:message name="SessionStart" id="40"
+                 description="First record of the input journal: everything a replay needs to build the same engine">
+        <field name="hasSchedule" id="1" type="BooleanCode"/>
+        <field name="openNanoOfDay" id="2" type="int64"/>
+        <field name="closeNanoOfDay" id="3" type="int64"/>
+        <field name="offsetSeconds" id="4" type="int32"/>
+        <group name="instruments" id="5" dimensionType="groupSizeEncoding">
+            <field name="tickSize" id="6" type="int64"/>
+            <field name="maxOrderQuantity" id="7" type="int64"/>
+            <field name="referencePrice" id="8" type="int64"/>
+            <field name="bandPercent" id="9" type="int32"/>
+            <data name="symbol" id="10" type="varStringEncoding"/>
+        </group>
+    </sbe:message>
+</sbe:messageSchema>
