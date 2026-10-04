@@ -170,6 +170,27 @@ services:
       traefik.http.routers.dashboard.entrypoints: web
       traefik.http.routers.dashboard.service: api@internal
 
+  # Simulated traders (S13): a market maker plus noise and momentum traders, all through the public API.
+  agents:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/agents.Dockerfile
+    image: prayog/agents:dev
+    profiles: [app]
+    depends_on:
+      exchange: { condition: service_healthy }
+    environment:
+      PRAYOG_API_URL: http://exchange:8080
+      # Tokens from inside the network; they still carry the public issuer (KC_HOSTNAME).
+      PRAYOG_AUTH_URL: http://keycloak:8080/realms/prayog
+      PRAYOG_CLIENT_ID: prayog-agents
+      PRAYOG_CLIENT_SECRET: ${PRAYOG_AGENTS_SECRET:?set in .env}
+      AGENTS_SCENARIO: ${AGENTS_SCENARIO:-calm}
+      AGENTS_SEED: ${AGENTS_SEED:-42}
+    mem_limit: 256m
+    restart: unless-stopped
+    # No health check: it serves nothing; `make logs SERVICE=agents` shows a market report every 30 s.
+
   # Placeholder so app. answers before the web app exists; it prints the request it received.
   app-placeholder:
     image: traefik/whoami:v1.12.0
