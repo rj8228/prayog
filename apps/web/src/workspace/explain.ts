@@ -38,7 +38,7 @@ export const EXPLAIN: Record<
     label: 'Private feed (API reference)',
   },
   positions: {
-    text: 'Your position per symbol from your own fills (average-cost method), realized P&L from closed shares and unrealized P&L at the last trade price. An estimate for this browser session until the post-trade service (Step 2) keeps the official numbers.',
+    text: "Your official position per symbol from the post-trade ledger: every fill ever (average-cost method), realised P&L from closed shares, unrealised P&L at the last trade price, charges, and your leaderboard rank. If post-trade is unreachable, an estimate from this session's fills is shown instead.",
     link: `${DOCS}/overview/market-making.html`,
     label: 'Inventory and P&L',
   },
@@ -56,5 +56,15 @@ export const EXPLAIN: Record<
     text: 'Textbook strategies running in this tab, each in its own account (algo-<strategy>-<symbol>) with its own risk limits checked before every order. They use the same public API as any bot; closing the tab stops them and cancels their orders.',
     link: `${DOCS}/bots/`,
     label: 'Building a bot',
+  },
+  blotter: {
+    text: "Your order history, fills (with charges and realised P&L) and refused orders, from the post-trade ledger. It is built from the exchange's Kafka event stream, so it survives restarts and lags the exchange by milliseconds.",
+    link: `${DOCS}/adr/0015-post-trade-ledger-and-leaderboard/`,
+    label: 'Post-trade ledger',
+  },
+  leaderboard: {
+    text: 'Every account ranked by net P&L (realised + unrealised - charges), kept in a Redis sorted set by the post-trade service. Your own row is in bold once you are on it.',
+    link: `${DOCS}/adr/0015-post-trade-ledger-and-leaderboard/`,
+    label: 'Leaderboard',
   },
 }

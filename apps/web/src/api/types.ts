@@ -158,17 +158,29 @@ export interface Simulation {
   jumps: { id: number; symbol: string | null; percent: number }[]
 }
 
-export interface Overview {
-  status: {
-    recoveredFromJournal: boolean
-    lastProcessedInputSeq: number
-    ringCapacity: number
-    ringRemaining: number
-    publishErrors: number
-    simTime: number
-    clockMultiplier: number
-    session: SessionState
+/** GET /api/v1/ops/status (roles ops, admin). */
+export interface OpsStatus {
+  recoveredFromJournal: boolean
+  lastProcessedInputSeq: number
+  ringCapacity: number
+  ringRemaining: number
+  publishErrors: number
+  simTime: number
+  clockMultiplier: number
+  session: SessionState
+  kafka?: {
+    enabled: boolean
+    connected: boolean
+    publishedSeq: number
+    lag: number
+    errors: number
   }
+  recoveredFromSnapshotInputSeq?: number
+  lastSnapshotInputSeq?: number
+}
+
+export interface Overview {
+  status: OpsStatus
   orders: Record<string, number>
   latencyMillis: Record<string, number>
   journalBytes: number
@@ -215,4 +227,90 @@ export interface ReplayWindow {
     }[]
   }[]
   truncated: boolean
+}
+
+// ---- post-trade (ADR 0015): official positions, P&L, history and the leaderboard ----
+
+export interface PositionView {
+  symbol: string
+  quantity: number
+  averagePrice: number
+  cost: number
+  mark: number
+  realisedPnl: number
+  unrealisedPnl: number
+  charges: number
+  netPnl: number
+  bought: number
+  sold: number
+  trades: number
+}
+
+export interface PnlSummary {
+  accountId: number
+  label: string
+  realisedPnl: number
+  unrealisedPnl: number
+  charges: number
+  netPnl: number
+  trades: number
+  rank: number
+  positions: PositionView[]
+}
+
+export interface LedgerFill {
+  tradeId: number
+  orderId: number
+  symbol: string
+  side: Side
+  price: number
+  quantity: number
+  charges: number
+  realisedPnl: number
+  simTime: number
+  eventId: number
+}
+
+export interface LedgerOrder {
+  orderId: number
+  clientOrderId: string
+  symbol: string
+  side: Side
+  orderType: 'LIMIT' | 'MARKET'
+  price: number
+  quantity: number
+  filledQuantity: number
+  leavesQuantity: number
+  status: 'open' | 'partially_filled' | 'filled' | 'cancelled'
+  reason: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface LedgerRejection {
+  eventId: number
+  clientOrderId: string
+  symbol: string
+  reason: string
+  simTime: number
+}
+
+export interface Leaderboard {
+  accounts: number
+  entries: {
+    rank: number
+    accountId: number
+    name: string | null
+    netPnl: number
+  }[]
+}
+
+export interface PostTradeStatus {
+  trades: number
+  accounts: number
+  pnlBeforeCharges: number
+  charges: number
+  netQuantityBySymbol: Record<string, number>
+  lastEventIdByPartition: Record<string, number>
+  eventsConsumed: number
 }

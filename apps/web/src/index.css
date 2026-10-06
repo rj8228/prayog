@@ -958,3 +958,29 @@ kbd {
 .strategy-log .error {
   color: var(--down);
 }
+
+/* S19: day progress, own row on the leaderboard, tabs inside a panel title */
+.progress {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+  margin: 6px 0;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s linear;
+}
+tr.mine td {
+  font-weight: 600;
+}
+.panel-title .tabs button {
+  font-size: 0.8em;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+.panel-title .tabs button.active {
+  font-weight: 700;
+  text-decoration: underline;
+}

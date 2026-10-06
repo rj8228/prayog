@@ -383,6 +383,29 @@ class ExchangeApiTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden();
+        // The ops page steers the simulation, but sees nothing else of the admin console.
+        client.mutateWith(ops())
+                .get()
+                .uri("/api/v1/simulation")
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.mutateWith(ops())
+                .put()
+                .uri("/api/v1/admin/simulation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("paused", false))
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.mutateWith(trader("alice"))
+                .put()
+                .uri("/api/v1/admin/simulation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("paused", true))
+                .exchange()
+                .expectStatus()
+                .isForbidden();
         // An admin also trades like anyone else.
         JsonNode placed = place(
                 admin(),

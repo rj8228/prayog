@@ -21,5 +21,6 @@ decision is tested.
 | 0014 | [Duplicate client order IDs, matching-rules versions, verified recovery](0014-duplicate-client-order-ids.md) | 2026-10-07 |
 | 0015 | [Post-trade ledger and leaderboard](0015-post-trade-ledger-and-leaderboard.md) | 2026-10-07 |
 | 0016 | [Engine snapshots: journaled snapshot points, verified on restore and in the replay check](0016-engine-snapshots.md) | 2026-10-07 |
+| 0017 | [Ops page and server-backed workspace panels](0017-ops-page-and-server-backed-panels.md) | 2026-10-07 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.

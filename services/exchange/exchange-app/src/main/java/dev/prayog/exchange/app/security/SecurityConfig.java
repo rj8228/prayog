@@ -34,7 +34,8 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
  *   <li>{@code trader} or {@code bot}: orders, own account, private feed.
  *   <li>{@code ops} (or {@code admin}): session, clock, kill switch, status.
  *   <li>{@code admin}: the admin console API (self-test, accounts, simulation control, journal replay).
- *   <li>{@code bot} or {@code admin}: read the simulation controls.
+ *   <li>{@code ops} or {@code admin}: also the simulation controls (read and change).
+ *   <li>{@code bot}: read the simulation controls.
  * </ul>
  */
 @Configuration
@@ -56,10 +57,13 @@ public class SecurityConfig {
                         .permitAll()
                         .pathMatchers("/api/v1/ops/**")
                         .hasAnyRole("ops", "admin")
+                        // The ops page (S19) steers the simulated traders too: scenario, pause, news.
+                        .pathMatchers("/api/v1/admin/simulation")
+                        .hasAnyRole("ops", "admin")
                         .pathMatchers("/api/v1/admin/**")
                         .hasRole("admin")
                         .pathMatchers(HttpMethod.GET, "/api/v1/simulation")
-                        .hasAnyRole("bot", "admin")
+                        .hasAnyRole("bot", "ops", "admin")
                         .pathMatchers("/api/v1/**")
                         .hasAnyRole("trader", "bot")
                         .anyExchange()

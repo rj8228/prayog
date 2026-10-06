@@ -1,22 +1,21 @@
 import { useState } from 'react'
 import { adminApi } from '../api/rest'
-import type { Overview } from '../api/types'
+import type { OpsStatus, Overview, Simulation } from '../api/types'
 import { simClock } from '../market/format'
 import { useAction } from './useAdmin'
 
 /** Session and clock: the global kill switch (halt) and the sim speed. */
 export function MarketControl({
-  overview,
+  status: s,
   onChange,
 }: {
-  overview: Overview | null
+  status: OpsStatus | null
   onChange: () => void
 }) {
   const { status, run } = useAction()
   const [speed, setSpeed] = useState('')
   const act = (label: string, action: (t: string) => Promise<unknown>) =>
     void run(label, action).then(onChange)
-  const s = overview?.status
   return (
     <section className="panel">
       <div className="panel-title">Market control</div>
@@ -74,17 +73,16 @@ export function MarketControl({
 
 /** Live controls for the simulated traders: scenario, pause, and "news" price jumps. */
 export function SimulationPanel({
-  overview,
+  simulation: sim,
   symbols,
   onChange,
 }: {
-  overview: Overview | null
+  simulation: Simulation | null
   symbols: string[]
   onChange: () => void
 }) {
   const { status, run } = useAction()
   const [symbol, setSymbol] = useState<string>('INFY')
-  const sim = overview?.simulation
   const change = (
     label: string,
     body: Parameters<typeof adminApi.simulation>[1],

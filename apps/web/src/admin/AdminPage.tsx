@@ -50,9 +50,12 @@ function AdminConsole() {
     <div className="app">
       <Header />
       <main className="admin-grid">
-        <MarketControl overview={overview.value} onChange={overview.refresh} />
+        <MarketControl
+          status={overview.value?.status ?? null}
+          onChange={overview.refresh}
+        />
         <SimulationPanel
-          overview={overview.value}
+          simulation={overview.value?.simulation ?? null}
           symbols={knownSymbols}
           onChange={overview.refresh}
         />

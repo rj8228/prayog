@@ -17,6 +17,8 @@ import { Ladder } from '../components/Ladder'
 import { MyFills } from '../components/MyFills'
 import { MyOrders } from '../components/MyOrders'
 import { OrderTicket } from '../components/OrderTicket'
+import { Blotter } from '../components/Blotter'
+import { LeaderboardPanel } from '../components/LeaderboardPanel'
 import { Positions } from '../components/Positions'
 import { PriceChart } from '../components/PriceChart'
 import { TradeTape } from '../components/TradeTape'
@@ -83,6 +85,8 @@ const PANELS: Record<PanelId, () => ReactNode> = {
   watchlist: () => <Watchlist />,
   depth: () => <DepthChart />,
   strategies: () => <StrategiesPanel />,
+  blotter: () => <Blotter />,
+  leaderboard: () => <LeaderboardPanel />,
 }
 
 /**

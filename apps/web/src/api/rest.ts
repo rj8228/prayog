@@ -11,6 +11,13 @@ import type {
   Overview,
   ReplayWindow,
   SessionInfo,
+  Leaderboard,
+  LedgerFill,
+  LedgerOrder,
+  LedgerRejection,
+  OpsStatus,
+  PnlSummary,
+  PostTradeStatus,
   SessionState,
   Side,
   Simulation,
@@ -169,4 +176,46 @@ export const adminApi = {
       {},
       token,
     ),
+}
+
+/**
+ * The post-trade service (ADR 0015): the official ledger. Same host and token as the exchange; Traefik routes these
+ * paths to post-trade. {@code label} picks one of your accounts (the main one when absent).
+ */
+export const postTradeApi = {
+  pnl: (token: string, label?: string) =>
+    call<PnlSummary>('/account/pnl', withLabel(label), token),
+  fills: (token: string, limit = 100, label?: string) =>
+    call<LedgerFill[]>(
+      `/account/fills?limit=${limit}`,
+      withLabel(label),
+      token,
+    ),
+  orders: (token: string, limit = 100, label?: string) =>
+    call<LedgerOrder[]>(
+      `/account/orders?limit=${limit}`,
+      withLabel(label),
+      token,
+    ),
+  rejections: (token: string, limit = 50, label?: string) =>
+    call<LedgerRejection[]>(
+      `/account/rejections?limit=${limit}`,
+      withLabel(label),
+      token,
+    ),
+  leaderboard: (limit = 20) => call<Leaderboard>(`/leaderboard?limit=${limit}`),
+  status: (token: string) =>
+    call<PostTradeStatus>('/post-trade/status', {}, token),
+}
+
+function withLabel(label?: string): RequestInit {
+  return label ? { headers: { 'X-Prayog-Account': label } } : {}
+}
+
+/** Ops calls (roles ops or admin): status, market and clock, simulation, snapshots. */
+export const opsApi = {
+  status: (token: string) => call<OpsStatus>('/ops/status', {}, token),
+  simulation: (token: string) => call<Simulation>('/simulation', {}, token),
+  snapshot: (token: string) =>
+    call<{ inputSeq: number }>('/ops/snapshot', post(), token),
 }

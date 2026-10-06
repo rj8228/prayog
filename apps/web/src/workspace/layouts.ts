@@ -13,6 +13,8 @@ export type PanelId =
   | 'watchlist'
   | 'depth'
   | 'strategies'
+  | 'blotter'
+  | 'leaderboard'
 
 export const PANEL_TITLES: Record<PanelId, string> = {
   chart: 'Price chart',
@@ -25,6 +27,8 @@ export const PANEL_TITLES: Record<PanelId, string> = {
   watchlist: 'Watchlist',
   depth: 'Depth chart',
   strategies: 'Strategies',
+  blotter: 'Blotter',
+  leaderboard: 'Leaderboard',
 }
 
 export const MIN_SIZE: Record<PanelId, { minW: number; minH: number }> = {
@@ -38,6 +42,8 @@ export const MIN_SIZE: Record<PanelId, { minW: number; minH: number }> = {
   watchlist: { minW: 2, minH: 5 },
   depth: { minW: 3, minH: 6 },
   strategies: { minW: 4, minH: 8 },
+  blotter: { minW: 4, minH: 6 },
+  leaderboard: { minW: 3, minH: 6 },
 }
 
 type Item = [PanelId, number, number, number, number] // id, x, y, w, h
@@ -108,6 +114,19 @@ export const PRESETS: Record<string, Preset> = {
         ['ladder', 7, 9, 5, 7],
         ['positions', 0, 16, 6, 8],
         ['fills', 6, 16, 6, 8],
+      ]),
+    },
+  },
+  review: {
+    name: 'Review',
+    description:
+      'After the trade: official P&L, the blotter of every order and fill, and the leaderboard',
+    layouts: {
+      lg: layout([
+        ['positions', 0, 0, 7, 11],
+        ['leaderboard', 7, 0, 5, 11],
+        ['blotter', 0, 11, 8, 14],
+        ['chart', 8, 11, 4, 14],
       ]),
     },
   },

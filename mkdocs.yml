@@ -126,6 +126,7 @@ nav:
       - runbook/12-exchange-internals.md
       - runbook/13-admin-console.md
       - runbook/14-workspace-and-strategies.md
+      - runbook/15-ops-page.md
   - Learn:
       - learnings/README.md
       - Sessions:
@@ -178,6 +179,7 @@ nav:
       - adr/0014-duplicate-client-order-ids.md
       - adr/0015-post-trade-ledger-and-leaderboard.md
       - adr/0016-engine-snapshots.md
+      - adr/0017-ops-page-and-server-backed-panels.md
   - Project:
       - Progress: PROGRESS.md
       - Build plan: BUILD_PLAN.md

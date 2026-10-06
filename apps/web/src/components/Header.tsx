@@ -8,7 +8,9 @@ import { simClock } from '../market/format'
 export function Header() {
   const { session, simTime, connected } = useAppSelector((s) => s.market)
   const { user, token } = useAuth()
-  const isAdmin = rolesOf(token).includes('admin')
+  const roles = rolesOf(token)
+  const isAdmin = roles.includes('admin')
+  const isOps = isAdmin || roles.includes('ops')
   const { pathname } = useLocation()
   return (
     <header className="header">
@@ -19,6 +21,11 @@ export function Header() {
           <Link className={pathname === '/' ? 'active' : ''} to="/">
             Market
           </Link>
+          {isOps && (
+            <Link className={pathname === '/ops' ? 'active' : ''} to="/ops">
+              Ops
+            </Link>
+          )}
           {isAdmin && (
             <Link className={pathname === '/admin' ? 'active' : ''} to="/admin">
               Admin
