@@ -11,6 +11,7 @@ import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.exchange.core.Command;
 import dev.prayog.exchange.core.EventSink;
 import dev.prayog.exchange.core.MatchingEngine;
+import dev.prayog.exchange.core.TakeSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -194,6 +195,8 @@ public final class ExchangePipeline implements AutoCloseable {
             slot.inputSeq = ++inputSeq;
             current = slot;
             engine.apply(slot.command);
+            // On the matching thread, so the copy is exactly the state after this input seq (ADR 0016).
+            slot.snapshot = slot.command instanceof TakeSnapshot ? engine.snapshot() : null;
         }
     }
 

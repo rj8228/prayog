@@ -3,6 +3,7 @@ package dev.prayog.exchange.app.core;
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.exchange.app.account.AccountHub;
 import dev.prayog.exchange.app.market.MarketHub;
+import dev.prayog.exchange.app.snapshot.SnapshotWriter;
 import dev.prayog.exchange.core.pipeline.CommandSlot;
 import dev.prayog.exchange.core.pipeline.PipelineHandler;
 import java.util.List;
@@ -25,13 +26,18 @@ final class OutboundHandler implements PipelineHandler {
 
     private final MarketHub market;
     private final AccountHub accounts;
+    private final SnapshotWriter snapshots;
     private final AtomicLong lastInputSeq = new AtomicLong();
+    private long lastEventSeq;
     private final AtomicLong publishErrors = new AtomicLong();
 
-    OutboundHandler(MarketHub market, AccountHub accounts, long lastInputSeq) {
+    OutboundHandler(
+            MarketHub market, AccountHub accounts, SnapshotWriter snapshots, long lastInputSeq, long lastEventSeq) {
         this.market = market;
         this.accounts = accounts;
+        this.snapshots = snapshots;
         this.lastInputSeq.set(lastInputSeq);
+        this.lastEventSeq = lastEventSeq;
     }
 
     @Override
@@ -44,6 +50,14 @@ final class OutboundHandler implements PipelineHandler {
         } catch (RuntimeException e) {
             publishErrors.incrementAndGet();
             log.error("publishing events of input seq {} failed", slot.inputSeq(), e);
+        }
+        if (!events.isEmpty()) {
+            lastEventSeq = events.getLast().seq();
+        }
+        if (slot.snapshot() != null) {
+            // Market data has applied everything up to this input seq, like the engine copy in the slot (ADR 0016).
+            snapshots.submit(
+                    slot.inputSeq(), lastEventSeq, slot.snapshot(), market.trackerState(), market.marketState());
         }
         if (slot.context() instanceof CompletableFuture<?> pending) {
             ((CompletableFuture<CommandResult>) pending).complete(new CommandResult(slot.inputSeq(), events));

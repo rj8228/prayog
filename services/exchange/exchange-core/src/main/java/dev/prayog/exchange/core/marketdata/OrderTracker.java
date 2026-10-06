@@ -60,6 +60,18 @@ public final class OrderTracker {
         long quantity;
         long leaves;
 
+        Tracked(OpenOrder o) {
+            orderId = o.orderId();
+            clientOrderId = o.clientOrderId();
+            accountId = o.accountId();
+            symbol = o.symbol();
+            side = o.side();
+            rests = true;
+            price = o.price();
+            quantity = o.quantity();
+            leaves = o.leavesQuantity();
+        }
+
         Tracked(OrderAccepted a) {
             orderId = a.orderId();
             clientOrderId = a.clientOrderId();
@@ -191,6 +203,41 @@ public final class OrderTracker {
 
     public SessionState session() {
         return session;
+    }
+
+    /** What a snapshot stores (ADR 0016): every open order in id order, the session, the last event seen. */
+    public record State(List<OpenOrder> openOrders, SessionState session, long lastEventSeq) {
+        public State {
+            openOrders = List.copyOf(openOrders);
+        }
+    }
+
+    /** The tracker's state between commands. */
+    public State state() {
+        List<OpenOrder> open = new ArrayList<>();
+        orders.values().stream()
+                .filter(o -> o.rests && o.leaves > 0)
+                .sorted(Comparator.comparingLong(o -> o.orderId))
+                .forEach(o -> open.add(new OpenOrder(
+                        o.orderId, o.clientOrderId, o.accountId, o.symbol, o.side, o.price, o.quantity, o.leaves)));
+        return new State(open, session, lastEventSeq);
+    }
+
+    /** Replaces everything with {@code state}; levels are rebuilt from the open orders. */
+    public void restore(State state) {
+        orders.clear();
+        openByAccount.clear();
+        bids.clear();
+        asks.clear();
+        for (OpenOrder o : state.openOrders()) {
+            Tracked order = new Tracked(o);
+            orders.put(order.orderId, order);
+            openByAccount.computeIfAbsent(order.accountId, k -> new TreeSet<>()).add(order.orderId);
+            contribute(order, +1);
+        }
+        before.clear(); // nothing to report: this is the starting point, not a change
+        session = state.session();
+        lastEventSeq = state.lastEventSeq();
     }
 
     public long lastEventSeq() {

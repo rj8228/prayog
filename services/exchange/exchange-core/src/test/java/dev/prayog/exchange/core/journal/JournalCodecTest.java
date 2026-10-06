@@ -26,6 +26,7 @@ import dev.prayog.exchange.core.SessionSchedule;
 import dev.prayog.exchange.core.SetAccountEnabled;
 import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.SetSessionState;
+import dev.prayog.exchange.core.TakeSnapshot;
 import dev.prayog.exchange.core.journal.sbe.CancelReasonCode;
 import dev.prayog.exchange.core.journal.sbe.OrderTypeCode;
 import dev.prayog.exchange.core.journal.sbe.RejectReasonCode;
@@ -168,7 +169,8 @@ class JournalCodecTest {
                 anyLong().map(ClockTick::new),
                 Arbitraries.of(SessionState.class).map(SetSessionState::new),
                 Combinators.combine(anyLong(), Arbitraries.of(true, false)).as(SetAccountEnabled::new),
-                Arbitraries.integers().map(SetRules::new));
+                Arbitraries.integers().map(SetRules::new),
+                Arbitraries.just(new TakeSnapshot()));
     }
 
     @Provide

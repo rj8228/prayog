@@ -5,15 +5,18 @@ import dev.prayog.exchange.app.account.AccountHub;
 import dev.prayog.exchange.app.config.ExchangeProperties;
 import dev.prayog.exchange.app.kafka.KafkaEventPublisher;
 import dev.prayog.exchange.app.market.MarketHub;
+import dev.prayog.exchange.app.snapshot.SnapshotWriter;
 import dev.prayog.exchange.core.Command;
 import dev.prayog.exchange.core.EventSink;
 import dev.prayog.exchange.core.MatchingEngine;
 import dev.prayog.exchange.core.SessionSchedule;
 import dev.prayog.exchange.core.SetRules;
+import dev.prayog.exchange.core.TakeSnapshot;
 import dev.prayog.exchange.core.journal.EngineSetup;
 import dev.prayog.exchange.core.journal.FileJournal;
 import dev.prayog.exchange.core.journal.JournalHandler;
 import dev.prayog.exchange.core.journal.JournalRecovery;
+import dev.prayog.exchange.core.journal.Snapshot;
 import dev.prayog.exchange.core.pipeline.ClockTicker;
 import dev.prayog.exchange.core.pipeline.ExchangePipeline;
 import dev.prayog.exchange.core.pipeline.SimClock;
@@ -52,6 +55,8 @@ public final class ExchangeRuntime implements AutoCloseable {
     private final ScheduledExecutorService housekeeping;
     private final MarketHub market;
     private final KafkaEventPublisher kafka; // null when publishing is off
+    private final SnapshotWriter snapshots;
+    private final long recoveredFromSnapshot; // input seq of the snapshot recovery started from, 0 if none
     private final boolean recovered;
     private final long startedAfterSeq;
     private volatile long closedSinceWallNanos = -1;
@@ -62,6 +67,7 @@ public final class ExchangeRuntime implements AutoCloseable {
         FileJournal events = FileJournal.open(props.journalDir(), JournalHandler.EVENTS);
         long startSim;
         Function<EventSink, MatchingEngine> engineFactory;
+        long recoveredFrom = 0;
         if (input.lastSeq() < 0) {
             EngineSetup setup =
                     new EngineSetup(props.toInstruments(), props.schedule().toSchedule());
@@ -77,7 +83,8 @@ public final class ExchangeRuntime implements AutoCloseable {
                     props.journalDir(),
                     setup.instruments().size());
         } else {
-            JournalRecovery.Recovered r = JournalRecovery.recover(props.journalDir(), events, market::replay);
+            Snapshot start = usableSnapshot(props, input.lastSeq(), events.lastSeq(), market);
+            JournalRecovery.Recovered r = JournalRecovery.recover(props.journalDir(), events, market::replay, start);
             market.finishReplay();
             market.setInstruments(r.setup().instruments());
             journal = JournalHandler.resume(input, events, r);
@@ -86,14 +93,20 @@ public final class ExchangeRuntime implements AutoCloseable {
             startedAfterSeq = r.lastInputSeq();
             startSim = r.lastSimTime() > 0 ? r.lastSimTime() : freshStart(props);
             recovered = true;
+            recoveredFrom = r.snapshot() == null ? 0 : r.snapshot().inputSeq();
             log.info(
-                    "recovered session from {}: {} commands, {} events, {} events repaired",
+                    "recovered session from {}: {} commands, {} events, {} events repaired; {} commands replayed{}",
                     props.journalDir(),
                     r.lastInputSeq(),
                     r.lastEventSeq(),
-                    r.repairedEvents());
+                    r.repairedEvents(),
+                    r.replayedCommands(),
+                    r.snapshot() == null ? " (no snapshot)" : " after the snapshot at input seq " + recoveredFrom);
         }
-        outbound = new OutboundHandler(market, accounts, startedAfterSeq);
+        recoveredFromSnapshot = recoveredFrom;
+        snapshots =
+                new SnapshotWriter(props.journalDir(), snapshotSettings(props).keep());
+        outbound = new OutboundHandler(market, accounts, snapshots, startedAfterSeq, events.lastSeq());
         pipeline = ExchangePipeline.builder(props.pipeline().toConfig(), engineFactory)
                 .continueAfter(startedAfterSeq)
                 .then(journal)
@@ -126,6 +139,10 @@ public final class ExchangeRuntime implements AutoCloseable {
             t.setDaemon(true);
             return t;
         });
+        int every = snapshotSettings(props).everyMinutes();
+        if (every > 0) {
+            housekeeping.scheduleAtFixedRate(this::takeSnapshot, every, every, TimeUnit.MINUTES);
+        }
         if (props.clock().autoNextDay()) {
             long pauseNanos = TimeUnit.SECONDS.toNanos(props.clock().closedPauseSeconds());
             housekeeping.scheduleAtFixedRate(() -> rollToNextDay(pauseNanos), 1, 1, TimeUnit.SECONDS);
@@ -148,6 +165,19 @@ public final class ExchangeRuntime implements AutoCloseable {
             result.completeExceptionally(new ExchangeBusyException());
         }
         return result;
+    }
+
+    /**
+     * Journals a {@link TakeSnapshot}; the snapshot is written in the background once the command has passed the
+     * pipeline (ADR 0016). Completes when the state has been captured.
+     */
+    public CompletableFuture<CommandResult> takeSnapshot() {
+        CompletableFuture<CommandResult> done = submit(new TakeSnapshot());
+        done.exceptionally(e -> {
+            log.warn("snapshot request refused", e);
+            return null;
+        });
+        return done;
     }
 
     /** Sim time now, epoch microseconds. */
@@ -183,7 +213,9 @@ public final class ExchangeRuntime implements AutoCloseable {
                 clock.now(),
                 clock.multiplier(),
                 market.session(),
-                kafka != null ? kafka.status() : new KafkaEventPublisher.Status(false, false, 0, 0, 0));
+                kafka != null ? kafka.status() : new KafkaEventPublisher.Status(false, false, 0, 0, 0),
+                recoveredFromSnapshot,
+                snapshots.lastInputSeq());
     }
 
     /** Operational state for the ops page and debugging. */
@@ -197,7 +229,9 @@ public final class ExchangeRuntime implements AutoCloseable {
             long simTime,
             int clockMultiplier,
             SessionState session,
-            KafkaEventPublisher.Status kafka) {}
+            KafkaEventPublisher.Status kafka,
+            long recoveredFromSnapshotInputSeq,
+            long lastSnapshotInputSeq) {}
 
     @Override
     public void close() throws Exception {
@@ -206,7 +240,13 @@ public final class ExchangeRuntime implements AutoCloseable {
             kafka.close(); // first: it only reads the journal, and saves its checkpoint on the way out
         }
         ticker.close();
+        try {
+            takeSnapshot().get(10, TimeUnit.SECONDS); // so the next start replays almost nothing
+        } catch (Exception e) {
+            log.warn("no snapshot at shutdown; the next start replays from an older one", e);
+        }
         pipeline.close(); // drains everything already submitted through the journal
+        snapshots.close(); // finishes writing
         journal.close();
         log.info("exchange stopped at input seq {}", outbound.lastInputSeq());
     }
@@ -230,6 +270,32 @@ public final class ExchangeRuntime implements AutoCloseable {
             }
         } catch (RuntimeException e) {
             log.warn("next-day roll failed", e);
+        }
+    }
+
+    private static ExchangeProperties.Snapshots snapshotSettings(ExchangeProperties props) {
+        return props.snapshots() != null ? props.snapshots() : new ExchangeProperties.Snapshots(5, 3);
+    }
+
+    /**
+     * The newest snapshot recovery can start from, with market data already restored from it; null for a full replay.
+     * A snapshot beyond the event log (the log was rebuilt) or with unreadable market data is skipped.
+     */
+    private static Snapshot usableSnapshot(ExchangeProperties props, long lastInput, long lastEvent, MarketHub market)
+            throws IOException {
+        Snapshot snapshot = Snapshot.latest(props.journalDir(), lastInput).orElse(null);
+        if (snapshot == null || snapshot.eventSeq() > lastEvent) {
+            return null;
+        }
+        try {
+            market.restore(snapshot.tracker(), SnapshotWriter.market(snapshot));
+            return snapshot;
+        } catch (RuntimeException e) {
+            log.warn(
+                    "snapshot at input seq {} has unreadable market data; replaying the whole journal",
+                    snapshot.inputSeq(),
+                    e);
+            return null;
         }
     }
 

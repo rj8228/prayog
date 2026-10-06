@@ -152,6 +152,65 @@ public final class MarketHub {
         }
     }
 
+    // ---- snapshots (ADR 0016)
+    // -----------------------------------------------------------------------------------------
+
+    /** Per-symbol statistics and recent trades, as a snapshot stores them. */
+    public record SymbolSnapshot(
+            String symbol,
+            long seq,
+            long last,
+            long open,
+            long high,
+            long low,
+            long volume,
+            long tradeCount,
+            List<TradeMessage> trades) {}
+
+    /** What a snapshot needs from market data besides the order tracker. */
+    public record MarketSnapshot(SessionState session, long simTime, List<SymbolSnapshot> symbols) {}
+
+    /** The derived open orders and book, for a snapshot. Called by the outbound stage, between commands. */
+    public synchronized OrderTracker.State trackerState() {
+        return tracker.state();
+    }
+
+    public synchronized MarketSnapshot marketState() {
+        List<SymbolSnapshot> out = new ArrayList<>();
+        for (SymbolState st : symbols.values()) {
+            out.add(new SymbolSnapshot(
+                    st.symbol,
+                    st.seq,
+                    st.last,
+                    st.open,
+                    st.high,
+                    st.low,
+                    st.volume,
+                    st.tradeCount,
+                    List.copyOf(st.trades)));
+        }
+        return new MarketSnapshot(session, simTime, out);
+    }
+
+    /** Starts from a snapshot, before the events replayed after it are applied with {@link #replay}. */
+    public synchronized void restore(OrderTracker.State trackerState, MarketSnapshot market) {
+        tracker.restore(trackerState);
+        session = market.session();
+        simTime = market.simTime();
+        for (SymbolSnapshot snap : market.symbols()) {
+            SymbolState st = state(snap.symbol());
+            st.seq = snap.seq();
+            st.last = snap.last();
+            st.open = snap.open();
+            st.high = snap.high();
+            st.low = snap.low();
+            st.volume = snap.volume();
+            st.tradeCount = snap.tradeCount();
+            st.trades.clear();
+            st.trades.addAll(snap.trades());
+        }
+    }
+
     /** Ends a replay: settles the derived book (its intermediate changes were never published). */
     public synchronized void finishReplay() {
         tracker.endCommand();

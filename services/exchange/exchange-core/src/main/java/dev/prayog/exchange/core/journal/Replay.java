@@ -129,6 +129,53 @@ public final class Replay {
         return expectedSeq[0] - 1;
     }
 
+    /** Result of {@link #checkSnapshots}: how many snapshots matched the replay, and the first that did not. */
+    public record SnapshotReport(int verified, String firstMismatch) {
+        public boolean matches() {
+            return firstMismatch == null;
+        }
+    }
+
+    /**
+     * Checks every readable snapshot in {@code dir} (ADR 0016): replays the input journal once and compares the
+     * engine's state at each snapshot's input seq with what the snapshot recorded. A snapshot that recovery could
+     * start from must be exactly the state a full replay reaches.
+     */
+    public static SnapshotReport checkSnapshots(Path dir) throws IOException {
+        java.util.TreeMap<Long, Snapshot> wanted = new java.util.TreeMap<>();
+        for (Path file : Snapshot.list(dir)) {
+            try {
+                Snapshot s = Snapshot.decode(java.nio.file.Files.readAllBytes(file));
+                wanted.put(s.inputSeq(), s);
+            } catch (IOException damaged) {
+                // recovery skips damaged files too
+            }
+        }
+        if (wanted.isEmpty()) {
+            return new SnapshotReport(0, null);
+        }
+        JournalCodec codec = new JournalCodec();
+        MatchingEngine[] engine = {null};
+        int[] verified = {0};
+        String[] mismatch = {null};
+        JournalReader.read(dir, JournalHandler.INPUT, (seq, buffer, offset, length) -> {
+            if (engine[0] == null) {
+                engine[0] = codec.decodeEngineSetup(buffer, offset).newEngine(event -> {});
+            } else {
+                engine[0].apply(codec.decodeCommand(buffer, offset));
+            }
+            Snapshot s = wanted.get(seq);
+            if (s != null && mismatch[0] == null) {
+                if (engine[0].snapshot().equals(s.engine())) {
+                    verified[0]++;
+                } else {
+                    mismatch[0] = "snapshot at input seq " + seq + " differs from the replayed engine state";
+                }
+            }
+        });
+        return new SnapshotReport(verified[0], mismatch[0]);
+    }
+
     // Slow path, only after a mismatch: holds both logs in memory to point at the first event that differs.
     private static String firstDifference(Path dir) throws IOException {
         List<byte[]> recorded = new ArrayList<>();

@@ -80,6 +80,19 @@ public final class OrderBook {
         return orders;
     }
 
+    /** Every resting order: bids then asks, best price first, oldest first within a price (queue order). */
+    List<RestingOrder> ordersInPriorityOrder() {
+        List<RestingOrder> orders = new ArrayList<>(ordersById.size());
+        for (NavigableMap<Long, PriceLevel> side : List.of(bids, asks)) {
+            for (PriceLevel level : side.values()) {
+                for (RestingOrder o = level.head(); o != null; o = o.next) {
+                    orders.add(o);
+                }
+            }
+        }
+        return orders;
+    }
+
     /** The best level on a side, or null when that side is empty. */
     PriceLevel bestLevel(Side side) {
         Map.Entry<Long, PriceLevel> best = levels(side).firstEntry();

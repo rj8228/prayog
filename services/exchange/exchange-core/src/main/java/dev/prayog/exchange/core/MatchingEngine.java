@@ -11,9 +11,11 @@ import dev.prayog.contracts.event.OrderModified;
 import dev.prayog.contracts.event.OrderRejected;
 import dev.prayog.contracts.event.SessionStateChanged;
 import dev.prayog.contracts.event.Trade;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
@@ -92,7 +94,57 @@ public final class MatchingEngine {
             case SetSessionState state -> setSession(state.state());
             case SetAccountEnabled account -> setAccountEnabled(account.accountId(), account.enabled());
             case SetRules rules -> setRules(rules.version());
+            case TakeSnapshot snapshot -> {
+                // nothing changes; the pipeline copies the state (see ExchangePipeline)
+            }
         }
+    }
+
+    /** A copy of the engine's whole state (ADR 0016). Call on the matching thread; cost grows with resting orders. */
+    public EngineState snapshot() {
+        List<EngineState.Order> orders = new ArrayList<>();
+        for (OrderBook book : books.values()) {
+            for (RestingOrder o : book.ordersInPriorityOrder()) {
+                orders.add(new EngineState.Order(
+                        book.symbol(), o.orderId, o.accountId, o.side, o.price, o.quantity, o.leavesQuantity));
+            }
+        }
+        return new EngineState(
+                rulesVersion,
+                session,
+                simTime,
+                ticked,
+                nextEventSeq,
+                nextOrderId,
+                nextTradeId,
+                disabledAccounts.stream().sorted().toList(),
+                clientOrderIds.export(),
+                orders);
+    }
+
+    /** An engine in exactly the state {@code state} describes, emitting into {@code sink} from now on. */
+    public static MatchingEngine restore(
+            Collection<Instrument> instruments, SessionSchedule schedule, EngineState state, EventSink sink) {
+        MatchingEngine engine = new MatchingEngine(instruments, schedule, sink);
+        engine.rulesVersion = state.rulesVersion();
+        engine.session = state.session();
+        engine.simTime = state.simTime();
+        engine.ticked = state.ticked();
+        engine.nextEventSeq = state.nextEventSeq();
+        engine.nextOrderId = state.nextOrderId();
+        engine.nextTradeId = state.nextTradeId();
+        engine.disabledAccounts.addAll(state.disabledAccounts());
+        engine.clientOrderIds.restore(state.clientOrderIds());
+        for (EngineState.Order o : state.orders()) {
+            OrderBook book = engine.books.get(o.symbol());
+            if (book == null) {
+                throw new IllegalArgumentException("snapshot has an order for unlisted symbol " + o.symbol());
+            }
+            // Added in queue order, so each order gets back its place in the queue.
+            book.add(new RestingOrder(
+                    o.orderId(), o.accountId(), o.side(), o.price(), o.quantity(), o.leavesQuantity()));
+        }
+        return engine;
     }
 
     /** The matching-rules version in force. */

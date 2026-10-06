@@ -85,6 +85,7 @@ Updates sent while you were disconnected are not replayed: reconcile with `GET /
 | `POST /api/v1/ops/accounts/{accountId}` | `{enabled: false}` | Per-account kill switch: cancels its orders, refuses new ones |
 | `PUT /api/v1/ops/clock` | `{multiplier: 1..10000}` | Sim speed |
 | `POST /api/v1/ops/clock/next-open` | | Jump to the next day's open |
+| `POST /api/v1/ops/snapshot` | | Take an engine snapshot now (ADR 0016); returns its `inputSeq` |
 
 ## Account history and P&L (post-trade, role `trader` or `bot`)
 

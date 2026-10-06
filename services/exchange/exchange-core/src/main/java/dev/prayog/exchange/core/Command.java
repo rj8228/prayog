@@ -7,4 +7,11 @@ package dev.prayog.exchange.core;
  * <p>Sealed so a {@code switch} over commands must handle every type.
  */
 public sealed interface Command
-        permits NewOrder, CancelOrder, ModifyOrder, ClockTick, SetSessionState, SetAccountEnabled, SetRules {}
+        permits NewOrder,
+                CancelOrder,
+                ModifyOrder,
+                ClockTick,
+                SetSessionState,
+                SetAccountEnabled,
+                SetRules,
+                TakeSnapshot {}

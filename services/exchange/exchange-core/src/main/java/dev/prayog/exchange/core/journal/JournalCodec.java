@@ -23,6 +23,7 @@ import dev.prayog.exchange.core.SessionSchedule;
 import dev.prayog.exchange.core.SetAccountEnabled;
 import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.SetSessionState;
+import dev.prayog.exchange.core.TakeSnapshot;
 import dev.prayog.exchange.core.journal.sbe.BookUpdateDecoder;
 import dev.prayog.exchange.core.journal.sbe.BookUpdateEncoder;
 import dev.prayog.exchange.core.journal.sbe.BooleanCode;
@@ -59,6 +60,8 @@ import dev.prayog.exchange.core.journal.sbe.SetRulesEncoder;
 import dev.prayog.exchange.core.journal.sbe.SetSessionStateDecoder;
 import dev.prayog.exchange.core.journal.sbe.SetSessionStateEncoder;
 import dev.prayog.exchange.core.journal.sbe.SideCode;
+import dev.prayog.exchange.core.journal.sbe.TakeSnapshotDecoder;
+import dev.prayog.exchange.core.journal.sbe.TakeSnapshotEncoder;
 import dev.prayog.exchange.core.journal.sbe.TradeDecoder;
 import dev.prayog.exchange.core.journal.sbe.TradeEncoder;
 import java.time.LocalTime;
@@ -90,6 +93,7 @@ public final class JournalCodec {
     private final SetSessionStateEncoder setSessionStateEncoder = new SetSessionStateEncoder();
     private final SetAccountEnabledEncoder setAccountEnabledEncoder = new SetAccountEnabledEncoder();
     private final SetRulesEncoder setRulesEncoder = new SetRulesEncoder();
+    private final TakeSnapshotEncoder takeSnapshotEncoder = new TakeSnapshotEncoder();
 
     private final NewOrderDecoder newOrderDecoder = new NewOrderDecoder();
     private final CancelOrderDecoder cancelOrderDecoder = new CancelOrderDecoder();
@@ -187,6 +191,10 @@ public final class JournalCodec {
                         .wrapAndApplyHeader(buffer, offset, headerEncoder)
                         .version(c.version())
                         .encodedLength();
+            case TakeSnapshot c ->
+                takeSnapshotEncoder
+                        .wrapAndApplyHeader(buffer, offset, headerEncoder)
+                        .encodedLength();
         };
         return MessageHeaderEncoder.ENCODED_LENGTH + bodyLength;
     }
@@ -239,6 +247,7 @@ public final class JournalCodec {
                 new SetRules(setRulesDecoder
                         .wrapAndApplyHeader(buffer, offset, headerDecoder)
                         .version());
+            case TakeSnapshotDecoder.TEMPLATE_ID -> new TakeSnapshot();
             default -> throw new IllegalArgumentException("not a command: message id " + templateId);
         };
     }

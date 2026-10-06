@@ -80,6 +80,14 @@ public class OpsController {
         return Map.of("multiplier", exchange.clockMultiplier(), "simTime", exchange.simTime());
     }
 
+    /** Takes a snapshot now (ADR 0016); it is written in the background. */
+    @PostMapping("/snapshot")
+    Mono<Map<String, Object>> snapshot() {
+        return Mono.fromFuture(exchange.takeSnapshot())
+                .publishOn(Schedulers.parallel())
+                .map(r -> Map.of("inputSeq", r.inputSeq()));
+    }
+
     /** Jumps to the next scheduled open: today's orders expire at the close, then the new day opens. */
     @PostMapping("/clock/next-open")
     Map<String, Object> nextOpen() {

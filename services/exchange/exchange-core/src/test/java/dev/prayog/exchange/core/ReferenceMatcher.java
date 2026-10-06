@@ -87,6 +87,7 @@ final class ReferenceMatcher {
             case SetSessionState s -> session(s.state());
             case SetAccountEnabled a -> account(a.accountId(), a.enabled());
             case SetRules r -> rules = r.version() > rules && r.version() <= 2 ? r.version() : rules;
+            case TakeSnapshot t -> {}
         }
     }
 

@@ -3,6 +3,7 @@ package dev.prayog.exchange.core;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -52,6 +53,24 @@ final class ClientOrderIds {
             window.order.addLast(clientOrderId);
             if (window.order.size() > perAccount) {
                 window.ids.remove(window.order.removeFirst());
+            }
+        }
+    }
+
+    /** Every account's IDs, accounts ascending, IDs oldest first: for snapshots. */
+    List<EngineState.AccountClientOrderIds> export() {
+        return byAccount.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> new EngineState.AccountClientOrderIds(e.getKey(), List.copyOf(e.getValue().order)))
+                .toList();
+    }
+
+    /** Puts back what {@link #export} produced. */
+    void restore(List<EngineState.AccountClientOrderIds> accounts) {
+        byAccount.clear();
+        for (EngineState.AccountClientOrderIds account : accounts) {
+            for (String id : account.ids()) {
+                add(account.accountId(), id);
             }
         }
     }

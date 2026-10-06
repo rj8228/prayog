@@ -46,6 +46,10 @@ prayog:
       # Empty: publishing off. In Compose: kafka:9092 (inside the network).
       bootstrap: ${PRAYOG_KAFKA_BOOTSTRAP:}
       topic: prayog.exchange.events.v1
+    snapshots:
+      # Recovery starts from the newest snapshot instead of replaying the whole journal (ADR 0016).
+      every-minutes: ${PRAYOG_SNAPSHOT_EVERY_MINUTES:5}
+      keep: 3
 
 management:
   endpoints:

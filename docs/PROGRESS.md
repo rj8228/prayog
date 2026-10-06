@@ -37,7 +37,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 ## Step 2 additions (2026-10-07)
 - [x] Duplicate client order IDs rejected per account per trading day — ADR 0014
-- [ ] Engine snapshots (recovery replays from the latest snapshot)
+- [x] Engine snapshots (recovery replays from the latest snapshot) — ADR 0016
 
 ## M4 Hardening layers
 - [ ] S9 Benchmarks (4 h)

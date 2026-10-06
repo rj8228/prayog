@@ -291,6 +291,61 @@ class ExchangeApiTest {
     }
 
     @Test
+    void aRestartStartsFromTheShutdownSnapshotWithMarketDataIntact() {
+        place(
+                trader("alice"),
+                null,
+                Map.of("symbol", "TCS", "side", "SELL", "type", "LIMIT", "price", 401_000, "quantity", 5));
+        place(trader("bob"), null, Map.of("symbol", "TCS", "side", "BUY", "type", "MARKET", "quantity", 2));
+        long resting = place(
+                        trader("alice"),
+                        null,
+                        Map.of("symbol", "TCS", "side", "BUY", "type", "LIMIT", "price", 399_000, "quantity", 4))
+                .get("orderId")
+                .asLong();
+        JsonNode tickerBefore = ticker("TCS");
+        context.close(); // takes a snapshot on the way down
+
+        context = startApp(journal);
+        client = clientFor(context);
+        JsonNode status = get(ops(), "/api/v1/ops/status");
+        assertThat(status.get("recoveredFromSnapshotInputSeq").asLong())
+                .as("recovery started from the shutdown snapshot")
+                .isPositive();
+        assertThat(ticker("TCS")).isEqualTo(tickerBefore);
+        assertThat(get(trader("alice"), "/api/v1/orders").findValuesAsString("orderId"))
+                .contains(Long.toString(resting));
+        JsonNode book = get(null, "/api/v1/market/TCS/book");
+        assertThat(book.get("asks").get(0).get("quantity").asLong()).isEqualTo(3);
+        assertThat(get(null, "/api/v1/market/TCS/trades")).hasSize(1);
+
+        // Taken on request too; trading carries on as normal.
+        JsonNode taken = client.mutateWith(ops())
+                .post()
+                .uri("/api/v1/ops/snapshot")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(taken.get("inputSeq").asLong())
+                .isGreaterThan(status.get("recoveredFromSnapshotInputSeq").asLong());
+        awaitUntil(() ->
+                get(ops(), "/api/v1/ops/status").get("lastSnapshotInputSeq").asLong()
+                        == taken.get("inputSeq").asLong());
+    }
+
+    private JsonNode ticker(String symbol) {
+        for (JsonNode t : get(null, "/api/v1/market/tickers")) {
+            if (symbol.equals(t.get("symbol").asString())) {
+                return t;
+            }
+        }
+        throw new AssertionError("no ticker for " + symbol);
+    }
+
+    @Test
     void adminEndpointsAreForAdminsAndTheSimulationFeedForBots() {
         client.mutateWith(trader("alice"))
                 .get()

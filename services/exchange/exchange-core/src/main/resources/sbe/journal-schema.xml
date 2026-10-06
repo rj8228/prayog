@@ -111,6 +111,8 @@
     <sbe:message name="SetRules" id="7" description="Matching-rules version from here on (ADR 0014)">
         <field name="version" id="1" type="int32"/>
     </sbe:message>
+    <sbe:message name="TakeSnapshot" id="8" description="Snapshot point in the input (ADR 0016); no fields">
+    </sbe:message>
 
     <!-- Events (event log), ids 20-39 -->
     <sbe:message name="OrderAccepted" id="20">

@@ -24,7 +24,8 @@ public record ExchangeProperties(
         Pipeline pipeline,
         RateLimit rateLimit,
         MarketData marketData,
-        Kafka kafka) {
+        Kafka kafka,
+        Snapshots snapshots) {
 
     /** One listed symbol. Prices in paise. */
     public record InstrumentConfig(
@@ -77,6 +78,12 @@ public record ExchangeProperties(
             return bootstrap != null && !bootstrap.isBlank();
         }
     }
+
+    /**
+     * Snapshots (ADR 0016): one every {@code everyMinutes} of wall time (0 = only at shutdown), keeping the newest
+     * {@code keep}.
+     */
+    public record Snapshots(int everyMinutes, int keep) {}
 
     public List<Instrument> toInstruments() {
         return instruments.stream().map(InstrumentConfig::toInstrument).toList();

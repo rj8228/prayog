@@ -5,7 +5,7 @@
 #   3. post-trade: ledger caught up and zero-sum, a bot's trades in its P&L and on the leaderboard, survives a restart
 #      (tests/e2e/posttrade_check.py)
 #   4. deterministic replay of the LIVE journal: stop the exchange, replay its journal in a one-off container,
-#      require the same event-log checksum, start the exchange again.
+#      require the same event-log checksum, start the exchange again (from the snapshot taken at the stop).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 COMPOSE=(docker compose --env-file .env -f deploy/compose/compose.yaml --profile infra --profile app)
@@ -31,6 +31,12 @@ echo "== Replay of the live journal"
   -cp /app/app.jar -Dloader.main=dev.prayog.exchange.core.journal.ReplayCheck \
   org.springframework.boot.loader.launch.PropertiesLauncher /data/journal || status=1
 "${COMPOSE[@]}" up -d --wait exchange >/dev/null 2>&1 || { echo "exchange did not come back"; status=1; }
+# The stop above took a snapshot, so the restart must have started from it (ADR 0016), not replayed everything.
+T=$(make -s ops-token)
+from=$(curl -s -H "Authorization: Bearer $T" http://api.prayog.localhost/api/v1/ops/status |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["recoveredFromSnapshotInputSeq"])')
+if [ "${from:-0}" -gt 0 ]; then echo "restart recovered from the snapshot at input seq $from"
+else echo "FAIL: the restart did not use a snapshot"; status=1; fi
 
 echo
 if [ "$status" -eq 0 ]; then echo "E2E passed."; else echo "E2E FAILED."; fi

@@ -30,12 +30,18 @@ public final class ReplayCheck {
             System.out.printf(
                     "replayed  %d events  sha256 %s%n",
                     report.replayed().records(), report.replayed().sha256());
-            if (report.matches()) {
-                System.out.println("MATCH");
-                System.exit(0);
+            if (!report.matches()) {
+                System.out.println("MISMATCH: " + report.firstDifference());
+                System.exit(1);
             }
-            System.out.println("MISMATCH: " + report.firstDifference());
-            System.exit(1);
+            System.out.println("MATCH");
+            Replay.SnapshotReport snapshots = Replay.checkSnapshots(Path.of(args[0]));
+            if (!snapshots.matches()) {
+                System.out.println("SNAPSHOT MISMATCH: " + snapshots.firstMismatch());
+                System.exit(1);
+            }
+            System.out.printf("snapshots %d verified%n", snapshots.verified());
+            System.exit(0);
         } catch (IOException | RuntimeException e) {
             System.err.println("replay failed: " + e.getMessage());
             System.exit(2);

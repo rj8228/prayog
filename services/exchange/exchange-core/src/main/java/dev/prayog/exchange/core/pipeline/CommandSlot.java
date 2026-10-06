@@ -2,6 +2,7 @@ package dev.prayog.exchange.core.pipeline;
 
 import dev.prayog.contracts.event.ExchangeEvent;
 import dev.prayog.exchange.core.Command;
+import dev.prayog.exchange.core.EngineState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,6 +18,7 @@ public final class CommandSlot {
     Object context;
     long inputSeq;
     final List<ExchangeEvent> events = new ArrayList<>();
+    EngineState snapshot;
 
     /** The command, as submitted. */
     public Command command() {
@@ -34,6 +36,11 @@ public final class CommandSlot {
     /** Position of this command in the official input order, starting at 1. */
     public long inputSeq() {
         return inputSeq;
+    }
+
+    /** For a {@code TakeSnapshot} command, the engine's state right after it; otherwise null. */
+    public EngineState snapshot() {
+        return snapshot;
     }
 
     /** Events the engine produced for this command, in order. Valid only during the handler call. */

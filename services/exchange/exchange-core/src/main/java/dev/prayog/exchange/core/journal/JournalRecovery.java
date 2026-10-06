@@ -40,6 +40,8 @@ public final class JournalRecovery {
         private final long lastEventSeq;
         private final long lastSimTime;
         private final long repairedEvents;
+        private final Snapshot snapshot;
+        private final long replayedCommands;
 
         private Recovered(
                 EngineSetup setup,
@@ -48,7 +50,9 @@ public final class JournalRecovery {
                 long lastInputSeq,
                 long lastEventSeq,
                 long lastSimTime,
-                long repairedEvents) {
+                long repairedEvents,
+                Snapshot snapshot,
+                long replayedCommands) {
             this.setup = setup;
             this.engine = engine;
             this.sink = sink;
@@ -56,6 +60,18 @@ public final class JournalRecovery {
             this.lastEventSeq = lastEventSeq;
             this.lastSimTime = lastSimTime;
             this.repairedEvents = repairedEvents;
+            this.snapshot = snapshot;
+            this.replayedCommands = replayedCommands;
+        }
+
+        /** The snapshot recovery started from, or null if it replayed the whole journal. */
+        public Snapshot snapshot() {
+            return snapshot;
+        }
+
+        /** Commands replayed (after the snapshot, if there was one). */
+        public long replayedCommands() {
+            return replayedCommands;
         }
 
         /** The setup recorded in the journal (it wins over current configuration). */
@@ -102,13 +118,26 @@ public final class JournalRecovery {
      *     the input journal cannot explain
      */
     public static Recovered recover(Path dir, Journal events, Consumer<ExchangeEvent> replayed) throws IOException {
+        return recover(dir, events, replayed, null);
+    }
+
+    /**
+     * As {@link #recover(Path, Journal, Consumer)}, starting from {@code snapshot} (ADR 0016): the engine is restored
+     * from it and only the input after its seq is replayed, so {@code replayed} sees only the events after it; the
+     * caller restores its derived state from the snapshot first. A snapshot the event log has not reached (the log was
+     * rebuilt or cut) is ignored and the whole journal is replayed.
+     */
+    public static Recovered recover(Path dir, Journal events, Consumer<ExchangeEvent> replayed, Snapshot snapshot)
+            throws IOException {
         Objects.requireNonNull(replayed, "replayed");
         long eventLogEnd = events.lastSeq();
+        Snapshot start = snapshot != null && snapshot.eventSeq() <= eventLogEnd ? snapshot : null;
         JournalCodec codec = new JournalCodec();
         ExpandableDirectByteBuffer buffer = new ExpandableDirectByteBuffer(1024);
         SwitchingSink sink = new SwitchingSink();
         State state = new State();
-        JournalTailer recorded = new JournalTailer(dir, JournalHandler.EVENTS, 1);
+        JournalTailer recorded =
+                new JournalTailer(dir, JournalHandler.EVENTS, start == null ? 1 : start.eventSeq() + 1);
         RecordMatcher matcher = new RecordMatcher();
 
         sink.target = event -> {
@@ -134,7 +163,7 @@ public final class JournalRecovery {
             replayed.accept(event);
         };
 
-        JournalReader.read(dir, JournalHandler.INPUT, (seq, bytes, offset, length) -> {
+        RecordVisitor apply = (seq, bytes, offset, length) -> {
             if (state.engine == null) {
                 state.setup = codec.decodeEngineSetup(bytes, offset);
                 state.engine = state.setup.newEngine(sink);
@@ -150,7 +179,32 @@ public final class JournalRecovery {
             }
             state.engine.apply(command);
             state.lastInputSeq = seq;
-        });
+            state.replayedCommands++;
+        };
+        if (start == null) {
+            JournalReader.read(dir, JournalHandler.INPUT, apply);
+        } else {
+            // The setup is still record 0 of the input journal; the engine comes from the snapshot.
+            try (JournalTailer setup = new JournalTailer(dir, JournalHandler.INPUT, JournalHandler.SETUP_SEQ)) {
+                setup.poll(
+                        JournalHandler.SETUP_SEQ,
+                        1,
+                        (seq, bytes, offset, length) -> state.setup = codec.decodeEngineSetup(bytes, offset));
+            }
+            if (state.setup == null) {
+                throw new IllegalStateException("nothing to recover: the input journal in " + dir + " is empty");
+            }
+            state.engine =
+                    MatchingEngine.restore(state.setup.instruments(), state.setup.schedule(), start.engine(), sink);
+            state.lastInputSeq = start.inputSeq();
+            state.lastEventSeq = start.eventSeq();
+            state.lastSimTime = start.engine().simTime();
+            try (JournalTailer input = new JournalTailer(dir, JournalHandler.INPUT, start.inputSeq() + 1)) {
+                while (input.poll(Long.MAX_VALUE, 10_000, apply) > 0) {
+                    // keep reading until the end of the journal
+                }
+            }
+        }
         if (state.engine == null) {
             throw new IllegalStateException("nothing to recover: the input journal in " + dir + " is empty");
         }
@@ -167,7 +221,9 @@ public final class JournalRecovery {
                 state.lastInputSeq,
                 state.lastEventSeq,
                 state.lastSimTime,
-                state.repaired);
+                state.repaired,
+                start,
+                state.replayedCommands);
     }
 
     /** Compares one recorded event-log record with the replayed event's encoding. */
@@ -228,6 +284,7 @@ public final class JournalRecovery {
         long lastEventSeq;
         long lastSimTime;
         long repaired;
+        long replayedCommands;
     }
 
     /**

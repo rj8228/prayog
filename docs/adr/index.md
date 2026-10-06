@@ -20,5 +20,6 @@ decision is tested.
 | 0013 | [Kafka event publisher: tail the durable event log, file checkpoint, ops-tool client](0013-kafka-event-publisher.md) | 2026-10-07 |
 | 0014 | [Duplicate client order IDs, matching-rules versions, verified recovery](0014-duplicate-client-order-ids.md) | 2026-10-07 |
 | 0015 | [Post-trade ledger and leaderboard](0015-post-trade-ledger-and-leaderboard.md) | 2026-10-07 |
+| 0016 | [Engine snapshots: journaled snapshot points, verified on restore and in the replay check](0016-engine-snapshots.md) | 2026-10-07 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.
