@@ -1,4 +1,4 @@
-# 14. Duplicate client order IDs are rejected per account per trading day
+# 14. Duplicate client order IDs, matching-rules versions, verified recovery
 
 Date: 2026-10-07
 
@@ -29,10 +29,21 @@ refused. `RejectReason.DUPLICATE_CLIENT_ORDER_ID` was defined in the contracts i
    fewer than 10,000 orders from the same account arrive in between. At the bots' rate limit (500 orders/s) that is
    20 seconds, far longer than any sensible retry delay.
 5. **Deterministic:** hash lookups only, never iteration over a hash set; eviction follows arrival order.
-6. **No rules version needed this time.** Changing an engine rule changes how old journals replay. Every client so far
-   used random UUIDs (SDK, gateway default, self-test), so no existing journal contains a duplicate. The replay of
-   the live journal (about 1.1 million commands) matched after the change. A future rule change that would alter
-   history needs a rules version in `EngineSetup`.
+6. **Matching-rules versions, switched by a journaled command.** The first attempt enabled the rule for all
+   history. That was wrong: `smoke.sh` always sends the client order ID `smoke`, so the live journal held accepted
+   duplicates. Replaying it under the new rule rejected one of them, and every later order ID and event shifted.
+   So rule changes are now inputs:
+   - `SetRules(version)` is a command, journaled like any other. A new engine starts at version 1 (the original
+     rules). The exchange journals `SetRules(MatchingEngine.LATEST_RULES)` each time it starts; it is a no-op once the
+     engine is there.
+   - History before the command replays under the rules it was made with, and everything after it under the new
+     ones. This is how real venues change matching behaviour: from a given point, never retroactively.
+7. **Recovery verifies the event log.** Recovery used to check only that replay produced *at least* as many events as
+   the log held, so the bad first attempt started without complaint. It ran for about two minutes on a book that
+   differed from what clients had been told, and appended 191 events that never happened. Now every replayed event
+   must match the recorded one byte for byte, or the exchange refuses to start. Repair: the input journal is the
+   source of truth and the event log is derived, so move the event log aside and let recovery regenerate it
+   (runbook 7).
 
 ## Testing
 
@@ -42,6 +53,10 @@ refused. `RejectReason.DUPLICATE_CLIENT_ORDER_ID` was defined in the contracts i
   reference matcher models the rule and must agree event for event.
 - API: a retry over HTTP is `rejected` with `DUPLICATE_CLIENT_ORDER_ID`, and another account may use the same ID.
 - Planted bug (not clearing at the close) caught by the unit and the property test.
+- Rules versions: a version-1 engine accepts duplicates, `SetRules(2)` switches the rule on from that command, and
+  versions only move forward.
+- Recovery: an event log with one doctored event is refused, naming the seq; planted bug (skip the comparison)
+  caught.
 
 ## Trade-offs
 

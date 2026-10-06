@@ -13,9 +13,8 @@ timeout without risking a second order ([ADR 0014](../adr/0014-duplicate-client-
   10,000, is cheap and still covers every realistic retry.
 - [ ] **Rules live where replay sees them.** Putting the check in the engine means the journal and replay reproduce
   it. A gateway-only check would vanish on restart and could not be replayed.
-- [ ] **Changing rules versus replaying history.** A new rule changes what old inputs produce. That is safe only if
-  no old input triggers it, which can be proved by replaying the real journal. Otherwise the rule needs a version
-  recorded in the journal.
+- [ ] **Changing rules versus replaying history.** A new rule changes what old inputs produce. So the rule switch is
+  itself a journaled input (`SetRules`), and recovery verifies that replay reproduces the recorded events exactly.
 - [ ] **Test oracles must learn new rules too.** The reference matcher had to model the rule, otherwise the property
   test would have rejected the real engine.
 
@@ -75,24 +74,30 @@ traffic, while a retry happens within a few seconds of the timeout.
 - Eviction is first in, first out, using an `ArrayDeque` beside a `HashSet`. That keeps it deterministic: the same
   inputs always evict the same IDs.
 
-### 4. Adding a rule changes how the engine treats old inputs. How did we know the live journal still replays identically?
+### 4. Adding a rule changes how the engine treats old inputs. What went wrong the first time, and how is it handled now?
 
-**What it's asking:** the risk a rule change poses to deterministic replay.
+**What it's asking:** the risk a rule change poses to deterministic replay, and the safeguard.
 
-**Background:** Recovery and `make e2e` replay the input journal with the *current* engine code and compare against
-the recorded events. A rule that would have rejected an order that was accepted back then makes the replay
-diverge, and recovery would fail.
+**Background:** Recovery and `make e2e` replay the input journal with the *current* engine code. A rule that rejects
+an order that was accepted back then makes the replay diverge from the recorded history.
 
-**Prayog example:** If the simulated traders had ever reused an ID, the old journal would hold two accepted orders
-with that ID. The new engine would reject the second, every later order ID and event seq would shift, and the
-checksum would differ.
+**Prayog example (it really happened):** I reasoned that every client used random UUIDs, so no duplicate could exist,
+and enabled the rule for all history. But `smoke.sh` sends the ID `smoke` every time it runs. On restart, replay
+rejected a `smoke` order that had been accepted days earlier. From then on every order ID and event seq shifted by
+one. Recovery only compared event *counts*, so it started anyway, and appended 191 events that never happened. The
+exchange then traded for two minutes on a book that differed from what clients had been told. `make e2e`'s replay
+check caught it: `MISMATCH: event #16668: recorded OrderAccepted ... replayed OrderRejected ... DUPLICATE_CLIENT_ORDER_ID`.
 
 **Answer:**
-- First, reasoning: every client generated random UUIDs, so no duplicate could exist.
-- Then proof: the replay of the live journal, about 1.1 million commands, matched byte for byte after the change.
-- Had it not matched, the right fix would be a **rules version** stored in `EngineSetup` (record 0 of the journal):
-  old journals replay with old rules, and new sessions use new ones. Real exchanges do the same when they change
-  matching behaviour on a given date.
+- **Rule changes are inputs.** `SetRules(2)` is a journaled command. History before it replays under rules version 1,
+  everything after it under version 2. The exchange journals it at start-up. Real venues do the same: a matching
+  change applies from a date, never retroactively.
+- **Recovery verifies, not trusts.** Every replayed event must equal the recorded one byte for byte, or the exchange
+  refuses to start. A wrong book is far worse than a stopped exchange.
+- **Repair is possible because the event log is derived.** The input journal is the source of truth. Moving the
+  event log aside lets recovery regenerate it exactly.
+- **Lesson:** "I reasoned it can't happen" is a hypothesis. The replay check is the test, and it should run before
+  the change reaches real data.
 
 ### 5. How do the tests show the rule is right, and not just present?
 
@@ -111,5 +116,6 @@ checksum would differ.
 
 "Client order IDs are the idempotency key for order entry. The matching engine, not the gateway, rejects a duplicate
 per account per trading day, so the rule is atomic, journaled and replayed. Memory is bounded by a per-account FIFO
-window. Because rule changes alter how old journals replay, I proved the change safe by replaying the live journal;
-otherwise it would need a rules version in the journal header."
+window. Rule changes are journaled commands, so history replays under the rules it was made with, and recovery
+verifies every replayed event byte for byte. That check caught my own first attempt, which applied the rule
+retroactively."
