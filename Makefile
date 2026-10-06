@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help env env-upgrade users ops-token up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
+.PHONY: bench bench-latency help env env-upgrade users ops-token up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
@@ -114,3 +114,14 @@ docs: ## Build the docs site into site/ and check links
 
 docs-serve: ## Preview the docs site with live reload at http://127.0.0.1:8000/prayog/
 	$(DOCS_RUN) mkdocs serve
+
+BENCH := $(MVNW) -q -pl services/exchange/exchange-bench
+bench: ## JMH microbenchmarks of the matching engine (S9); record results in docs/benchmarks.md
+	$(MVNW) -q -pl services/exchange/exchange-bench -am install -DskipTests -Dspotless.check.skip=true
+	$(BENCH) exec:exec -Dexec.executable=java \
+		-Dexec.args="--add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp %classpath org.openjdk.jmh.Main $(ARGS)"
+
+bench-latency: ## End-to-end pipeline latency with HdrHistogram (S9), e.g. ARGS="50000 20 BUSY_SPIN"
+	$(MVNW) -q -pl services/exchange/exchange-bench -am install -DskipTests -Dspotless.check.skip=true
+	$(BENCH) exec:exec -Dexec.executable=java \
+		-Dexec.args="--add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp %classpath dev.prayog.exchange.bench.PipelineLatency $(ARGS)"

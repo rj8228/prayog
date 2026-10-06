@@ -45,6 +45,7 @@ Interactive explainers in [`docs/overview/`](../overview/index.md), each with a 
 | Duplicate client order IDs | [step-2-duplicate-client-order-ids.md](step-2-duplicate-client-order-ids.md) | Idempotency keys, retries after timeouts, bounded state, rule changes vs replay, test oracles |
 | S16–S17 Post-trade and leaderboard | [S16-S17-post-trade-and-leaderboard.md](S16-S17-post-trade-and-leaderboard.md) | Idempotent consumers, exactly-once effects, average cost in integers, zero-sum reconciliation, sorted sets, rebuildable views |
 | Engine snapshots | [step-2-engine-snapshots.md](step-2-engine-snapshots.md) | Snapshot plus log, consistent cuts in a pipeline, atomic file replace, fallbacks, equivalence testing |
+| S9 Benchmarks | [S09-benchmarks.md](S09-benchmarks.md) | JMH, steady state, percentiles, coordinated omission, group commit, GC tails |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far

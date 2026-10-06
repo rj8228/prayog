@@ -40,7 +40,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] Engine snapshots (recovery replays from the latest snapshot) — ADR 0016
 
 ## M4 Hardening layers
-- [ ] S9 Benchmarks (4 h)
+- [x] S9 Benchmarks (4 h) — docs/benchmarks.md
 - [ ] S14 Realism checks (4 h)
 - [ ] S20 Exchange rules as Cucumber scenarios (5 h)
 - [ ] S21 Observability (4 h)

@@ -129,6 +129,7 @@ nav:
       - runbook/15-ops-page.md
   - Learn:
       - learnings/README.md
+      - Benchmarks: benchmarks.md
       - Sessions:
           - S1 Repo skeleton: learnings/S01-repo-skeleton.md
           - S3–S4 Contracts and order book: learnings/S03-S04-contracts-and-order-book.md
@@ -143,6 +144,7 @@ nav:
           - Duplicate client order IDs: learnings/step-2-duplicate-client-order-ids.md
           - S16–S17 Post-trade and leaderboard: learnings/S16-S17-post-trade-and-leaderboard.md
           - Engine snapshots: learnings/step-2-engine-snapshots.md
+          - S9 Benchmarks: learnings/S09-benchmarks.md
           - Industry context: learnings/industry-context.md
       - Interactive pages:
           - overview/index.md
