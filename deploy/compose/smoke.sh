@@ -93,7 +93,7 @@ fi
 
 echo "Post-trade"
 check "post-trade container is healthy" sh -c "docker inspect -f '{{.State.Health.Status}}' \
-  \$($(printf '%q ' "${COMPOSE[@]}") ps -q post-trade) | grep -qx healthy"
+  \$(docker ps -q --filter label=com.docker.compose.service=post-trade) | grep -qx healthy"
 check "the leaderboard is public (200)" test "$(http_code "$API/leaderboard")" = 200
 if [ -n "$token" ]; then
   check "a bot reads its own P&L from post-trade" sh -c "curl -s -H 'Authorization: Bearer $token' $API/account/pnl | grep -q '\"netPnl\"'"

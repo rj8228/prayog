@@ -247,6 +247,7 @@ services:
 
   post-trade:
     image: prayog/post-trade:dev
+    pull_policy: never # built by post-trade-migrate (same image)
     profiles: [app]
     depends_on:
       post-trade-migrate: { condition: service_completed_successfully }
