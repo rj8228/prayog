@@ -74,6 +74,7 @@ public final class KafkaEventPublisher implements AutoCloseable {
     private final AtomicLong errors = new AtomicLong();
     private final Thread thread;
 
+    private volatile int generation; // bumped for each new producer; callbacks from an old one cannot fail the new
     private volatile boolean running = true;
     private volatile boolean connected;
     private Producer<String, byte[]> producer;
@@ -133,6 +134,7 @@ public final class KafkaEventPublisher implements AutoCloseable {
             try {
                 if (producer == null) {
                     producer = producers.get();
+                    generation++;
                     tailer = new JournalTailer(journalDir, JournalHandler.EVENTS, checkpoint.line() + 1);
                 }
                 int sent = 0;
@@ -168,13 +170,20 @@ public final class KafkaEventPublisher implements AutoCloseable {
                 new ProducerRecord<>(settings.topic(), EventJson.key(event), EventJson.toBytes(event));
         record.headers().add("eventId", Long.toString(seq).getBytes(StandardCharsets.UTF_8));
         checkpoint.sent(seq);
+        int sentBy = generation;
         producer.send(record, (metadata, error) -> {
+            if (error != null && sentBy != generation) {
+                return; // a replaced producer's abandoned send: already being resent
+            }
             if (error != null) {
                 failed.set(true);
+                connected = false; // here, not later in recover(), so status never shows an error while "connected"
                 errors.incrementAndGet();
             } else {
-                connected = true;
                 checkpoint.acked(seq);
+                if (!failed.get()) {
+                    connected = true; // an older batch's late ack must not undo a failure
+                }
             }
         });
     }
