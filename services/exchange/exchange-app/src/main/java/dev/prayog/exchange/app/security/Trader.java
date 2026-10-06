@@ -1,10 +1,7 @@
 package dev.prayog.exchange.app.security;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import dev.prayog.contracts.AccountIds;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Who is calling, resolved from a validated token.
@@ -21,9 +18,8 @@ import java.util.regex.Pattern;
 public record Trader(
         String subject, String username, String label, long accountId, String clientId, Set<String> roles) {
 
-    public static final String DEFAULT_LABEL = "main";
-    public static final String ACCOUNT_HEADER = "X-Prayog-Account";
-    private static final Pattern LABEL = Pattern.compile("[a-z0-9][a-z0-9-]{0,31}");
+    public static final String DEFAULT_LABEL = AccountIds.DEFAULT_LABEL;
+    public static final String ACCOUNT_HEADER = AccountIds.HEADER;
 
     public boolean isBot() {
         return roles.contains("bot");
@@ -38,28 +34,13 @@ public record Trader(
     }
 
     public static Trader of(String subject, String username, String label, String clientId, Set<String> roles) {
-        String l = label == null || label.isBlank() ? DEFAULT_LABEL : label;
-        if (!LABEL.matcher(l).matches()) {
-            throw new IllegalArgumentException(
-                    "account label must be 1-32 characters of a-z, 0-9 and '-', starting with a letter or digit");
-        }
+        String l = AccountIds.label(label);
         return new Trader(
                 subject, username == null ? subject : username, l, accountId(subject, l), clientId, Set.copyOf(roles));
     }
 
-    /** First 63 bits of SHA-256(subject + "/" + label); never 0. */
+    /** See {@link AccountIds#accountId}. */
     public static long accountId(String subject, String label) {
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest((subject + "/" + label).getBytes(StandardCharsets.UTF_8));
-            long id = 0;
-            for (int i = 0; i < 8; i++) {
-                id = (id << 8) | (hash[i] & 0xFF);
-            }
-            id &= Long.MAX_VALUE;
-            return id == 0 ? 1 : id;
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("every JVM provides SHA-256", e);
-        }
+        return AccountIds.accountId(subject, label);
     }
 }

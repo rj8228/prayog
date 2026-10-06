@@ -86,6 +86,23 @@ Updates sent while you were disconnected are not replayed: reconcile with `GET /
 | `PUT /api/v1/ops/clock` | `{multiplier: 1..10000}` | Sim speed |
 | `POST /api/v1/ops/clock/next-open` | | Jump to the next day's open |
 
+## Account history and P&L (post-trade, role `trader` or `bot`)
+
+Served by the post-trade service on the same hosts. Amounts are paise. Use `X-Prayog-Account` like on the exchange.
+
+| Method and path | Returns |
+|---|---|
+| `GET /api/v1/account/pnl` | `{accountId, label, realisedPnl, unrealisedPnl, charges, netPnl, trades, rank, positions: [{symbol, quantity, averagePrice, cost, mark, realisedPnl, unrealisedPnl, charges, netPnl, bought, sold, trades}]}` |
+| `GET /api/v1/account/fills?limit=100` | Newest first: `{tradeId, orderId, symbol, side, price, quantity, charges, realisedPnl, simTime, eventId}` |
+| `GET /api/v1/account/orders?limit=100` | Newest first: `{orderId, clientOrderId, symbol, side, orderType, price, quantity, filledQuantity, leavesQuantity, status (open\|partially_filled\|filled\|cancelled), reason, createdAt, updatedAt}` |
+| `GET /api/v1/account/rejections?limit=100` | Refused new orders: `{eventId, clientOrderId, symbol, reason, simTime}` |
+| `GET /api/v1/leaderboard?limit=20` | Public. `{accounts, entries: [{rank, accountId, name, netPnl}]}`; `name` is `username/label` once that account has looked itself up |
+| `GET /api/v1/post-trade/status` | Role `ops`. Ledger totals (trades, accounts, P&L before charges and net quantity per symbol, both 0 in a healthy ledger) and consumer progress per partition |
+
+P&L uses the average-cost method; charges are brokerage 0.03% capped at ₹20 per fill plus 0.0035% fees
+([ADR 0015](../adr/0015-post-trade-ledger-and-leaderboard.md)). The ledger follows the event stream, so it lags the
+exchange by milliseconds normally, longer after an outage.
+
 ## Event stream (Kafka)
 
 Every exchange event, in the shape of `contracts/schemas/events/exchange-event.schema.json`, on topic

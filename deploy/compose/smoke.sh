@@ -78,7 +78,8 @@ session=$(curl -s "$API/session" | json_field state)
 check "orders without a token are refused (401)" test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/orders")" = 401
 if [ -n "$token" ]; then
   placed=$(curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d '{"symbol":"INFY","side":"BUY","type":"LIMIT","price":140000,"quantity":1,"clientOrderId":"smoke"}' "$API/orders")
+    -d '{"symbol":"INFY","side":"BUY","type":"LIMIT","price":140000,"quantity":1,"clientOrderId":"smoke-'"$(date +%s)-$$"'"}' \
+    "$API/orders")
   status=$(printf '%s' "$placed" | json_field status)
   if [ "$session" = OPEN ]; then
     check "bot order rests on the book (session OPEN)" test "$status" = resting
@@ -89,6 +90,15 @@ if [ -n "$token" ]; then
     check "bot order is answered (session $session: rejected SESSION_NOT_OPEN)" test "$status" = rejected
   fi
 fi
+
+echo "Post-trade"
+check "post-trade container is healthy" sh -c "docker inspect -f '{{.State.Health.Status}}' \
+  \$($(printf '%q ' "${COMPOSE[@]}") ps -q post-trade) | grep -qx healthy"
+check "the leaderboard is public (200)" test "$(http_code "$API/leaderboard")" = 200
+if [ -n "$token" ]; then
+  check "a bot reads its own P&L from post-trade" sh -c "curl -s -H 'Authorization: Bearer $token' $API/account/pnl | grep -q '\"netPnl\"'"
+fi
+check "account P&L without a token is refused (401)" test "$(http_code "$API/account/pnl")" = 401
 
 echo "Data and messaging"
 check "PostgreSQL: prayog database answers SELECT 1" \

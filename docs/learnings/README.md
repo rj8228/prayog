@@ -43,6 +43,7 @@ Interactive explainers in [`docs/overview/`](../overview/index.md), each with a 
 | Step 1.5 Admin, workspace, strategies | [step-1.5-admin-workspace-strategies.md](step-1.5-admin-workspace-strategies.md) | Admin role and self-test, online replay, live simulation control, grid layouts, average-cost P&L, pure strategies, pre-trade risk |
 | S15 Kafka publisher | [S15-kafka-publisher.md](S15-kafka-publisher.md) | Topics, partitions and offsets, delivery guarantees, idempotent producers, contiguous acked checkpoint, journal as outbox, chaos tests |
 | Duplicate client order IDs | [step-2-duplicate-client-order-ids.md](step-2-duplicate-client-order-ids.md) | Idempotency keys, retries after timeouts, bounded state, rule changes vs replay, test oracles |
+| S16–S17 Post-trade and leaderboard | [S16-S17-post-trade-and-leaderboard.md](S16-S17-post-trade-and-leaderboard.md) | Idempotent consumers, exactly-once effects, average cost in integers, zero-sum reconciliation, sorted sets, rebuildable views |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far

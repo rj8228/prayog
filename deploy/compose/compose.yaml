@@ -227,6 +227,66 @@ services:
       traefik.http.routers.app-api.service: exchange
       traefik.http.services.exchange.loadbalancer.server.port: "8080"
 
+  # Post-trade (S16, S17): consumes the exchange's events into positions, P&L, charges and the leaderboard (ADR 0015).
+  # Its schema is migrated first by a one-off job from the same image (BUILD_PLAN 16.1 #9).
+  post-trade-migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/post-trade.Dockerfile
+    image: prayog/post-trade:dev
+    profiles: [app]
+    depends_on:
+      postgres: { condition: service_healthy }
+    entrypoint: ["java", "-cp", "/app/app.jar", "-Dloader.main=dev.prayog.posttrade.Migrate",
+                 "org.springframework.boot.loader.launch.PropertiesLauncher"]
+    environment:
+      PRAYOG_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?set in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    restart: "no"
+
+  post-trade:
+    image: prayog/post-trade:dev
+    profiles: [app]
+    depends_on:
+      post-trade-migrate: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    environment:
+      PRAYOG_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?set in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      PRAYOG_KAFKA_BOOTSTRAP: kafka:9092
+      PRAYOG_REDIS_HOST: redis
+      PRAYOG_JWK_SET_URI: http://keycloak:8080/realms/prayog/protocol/openid-connect/certs
+      PRAYOG_JWT_ISSUER: http://auth.prayog.localhost/realms/prayog
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    mem_limit: 512m
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8081 &&
+          printf 'GET /actuator/health/readiness HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    labels:
+      traefik.enable: "true"
+      # Account history, P&L and the leaderboard live here; everything else under /api is the exchange's.
+      traefik.http.routers.post-trade.rule: >-
+        (Host(`api.prayog.localhost`) || Host(`app.prayog.localhost`)) &&
+        (PathPrefix(`/api/v1/account`) || PathPrefix(`/api/v1/leaderboard`) || PathPrefix(`/api/v1/post-trade`))
+      traefik.http.routers.post-trade.entrypoints: web
+      traefik.http.routers.post-trade.priority: "200"
+      traefik.http.routers.post-trade.service: post-trade
+      traefik.http.services.post-trade.loadbalancer.server.port: "8081"
+
   # Simulated traders (S13): a market maker plus noise and momentum traders, all through the public API.
   agents:
     build:

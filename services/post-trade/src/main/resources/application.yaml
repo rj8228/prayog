@@ -1,0 +1,70 @@
+# Defaults for the post-trade service. Every value can be overridden by an environment variable, e.g.
+# prayog.post-trade.charges.fees-ppm -> PRAYOG_POST_TRADE_CHARGES_FEES_PPM.
+server:
+  port: 8081
+
+spring:
+  application:
+    name: prayog-post-trade
+  datasource:
+    url: ${PRAYOG_DB_URL:jdbc:postgresql://localhost:5432/prayog}
+    username: ${POSTGRES_USER:prayog}
+    password: ${POSTGRES_PASSWORD:}
+  jooq:
+    sql-dialect: postgres
+  flyway:
+    # Migrations run as a one-off job before the service starts (BUILD_PLAN 16.1 #9), never by the service itself.
+    enabled: false
+  kafka:
+    bootstrap-servers: ${PRAYOG_KAFKA_BOOTSTRAP:localhost:9094}
+    consumer:
+      group-id: prayog-post-trade
+      # A new consumer group starts at the beginning of the topic: the ledger is built from the whole history.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 1000
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+    listener:
+      type: batch
+      # Offsets are committed after the listener (and its database transaction) returns.
+      ack-mode: batch
+  data:
+    redis:
+      host: ${PRAYOG_REDIS_HOST:localhost}
+      port: 6379
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${PRAYOG_JWK_SET_URI:http://auth.prayog.localhost/realms/prayog/protocol/openid-connect/certs}
+
+prayog:
+  security:
+    issuer: ${PRAYOG_JWT_ISSUER:http://auth.prayog.localhost/realms/prayog}
+    audience: prayog-api
+  post-trade:
+    topic: prayog.exchange.events.v1
+    # The simple MVP charge model (ADR 0015): brokerage 0.03% capped at 20 rupees per fill, plus 0.0035% fees.
+    charges:
+      brokerage-ppm: 300
+      brokerage-cap-paise: 2000
+      fees-ppm: 35
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: prayog-post-trade
+
+logging:
+  level:
+    dev.prayog: INFO
+    org.apache.kafka: WARN
