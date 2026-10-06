@@ -33,8 +33,8 @@ def caught_up(ops: Ops) -> bool:
     published = ops.status()["kafka"]["publishedSeq"]
     try:
         status = ops.request("GET", "/api/v1/post-trade/status")
-    except httpx.HTTPStatusError:
-        return False  # restarting: 503 until Traefik routes to it again
+    except httpx.HTTPError:
+        return False  # restarting: 503, or no answer, until it is up and Traefik routes to it again
 
     consumed = max(status["lastEventIdByPartition"].values(), default=0)
     return consumed >= published - 50  # a few events may still be in flight

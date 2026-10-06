@@ -100,13 +100,21 @@ async def bot_round_trip(settings: Settings, symbol: str) -> None:
                 updates.append(update)
 
         listener = asyncio.create_task(listen())
-        await asyncio.sleep(1)  # let the private feed connect
         session = await client.session()
         if session.state != "OPEN":
             check(False, f"session is {session.state}: cannot test trading")
             listener.cancel()
             return
         band_low = next(i for i in await client.instruments() if i.symbol == symbol).band_low
+        # Wait until the private feed is really live: a probe order's acceptance must arrive on it.
+        # A fixed sleep was not enough under load (the token fetch and handshake can take seconds).
+        deadline = asyncio.get_running_loop().time() + 15
+        while asyncio.get_running_loop().time() < deadline:
+            probe = await client.buy_limit(symbol, 1, band_low)
+            await client.cancel(probe.order_id)
+            await asyncio.sleep(0.5)
+            if any(isinstance(u, OrderUpdate) and u.order_id == probe.order_id for u in updates):
+                break
         resting = await client.buy_limit(symbol, 1, band_low)
         check(resting.status == "resting", f"bot limit order rests (order {resting.order_id})")
         listed = any(o.order_id == resting.order_id for o in await client.open_orders())
