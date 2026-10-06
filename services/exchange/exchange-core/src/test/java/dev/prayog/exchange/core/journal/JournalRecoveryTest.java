@@ -113,6 +113,54 @@ class JournalRecoveryTest {
         }
     }
 
+    /**
+     * The event log says something the input journal does not produce (here: one order's quantity doctored; in real
+     * life: a rule changed without SetRules). Recovery must refuse to start, not trade on a different book.
+     */
+    @Test
+    void anEventLogThatReplayDoesNotReproduceIsRefused() throws Exception {
+        runFresh(2, 1_000);
+        JournalCodec codec = new JournalCodec();
+        List<ExchangeEvent> original = new ArrayList<>();
+        JournalReader.read(dir, JournalHandler.EVENTS, (seq, b, o, l) -> original.add(codec.decodeEvent(b, o)));
+        int doctored = 0;
+        while (!(original.get(doctored) instanceof dev.prayog.contracts.event.OrderAccepted)) {
+            doctored++;
+        }
+        for (Path segment : Segments.list(dir, JournalHandler.EVENTS)) {
+            java.nio.file.Files.delete(segment);
+        }
+        org.agrona.ExpandableDirectByteBuffer buffer = new org.agrona.ExpandableDirectByteBuffer(256);
+        try (FileJournal events = FileJournal.open(dir, JournalHandler.EVENTS)) {
+            for (int i = 0; i < original.size(); i++) {
+                ExchangeEvent event = original.get(i);
+                if (i == doctored && event instanceof dev.prayog.contracts.event.OrderAccepted a) {
+                    event = new dev.prayog.contracts.event.OrderAccepted(
+                            a.seq(),
+                            a.simTime(),
+                            a.orderId(),
+                            a.clientOrderId(),
+                            a.accountId(),
+                            a.symbol(),
+                            a.side(),
+                            a.orderType(),
+                            a.price(),
+                            a.quantity() + 1);
+                }
+                int length = codec.encode(event, buffer, 0);
+                events.append(event.seq(), buffer, 0, length);
+            }
+        }
+        long doctoredSeq = original.get(doctored).seq();
+
+        try (FileJournal eventLog = FileJournal.open(dir, JournalHandler.EVENTS)) {
+            assertThatThrownBy(() -> JournalRecovery.recover(dir, eventLog, e -> {}))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("does not reproduce the event log")
+                    .hasMessageContaining("event " + doctoredSeq + " differs");
+        }
+    }
+
     private void runFresh(int threads, int perThread) throws Exception {
         SessionWorkload.Acks acks = new SessionWorkload.Acks();
         try (JournalHandler journal = JournalHandler.create(dir, SessionWorkload.SETUP);

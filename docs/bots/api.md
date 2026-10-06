@@ -38,6 +38,10 @@ Prices are integer **paise**; times are sim time in **epoch microseconds**. Auth
 | `modified` | The modify was applied (it may also have traded: see `fills`) |
 | `rejected` | Refused; `reason`: `UNKNOWN_SYMBOL`, `INVALID_PRICE`, `INVALID_QUANTITY`, `PRICE_NOT_ON_TICK`, `PRICE_OUTSIDE_BAND`, `SESSION_NOT_OPEN`, `UNKNOWN_ORDER`, `DUPLICATE_CLIENT_ORDER_ID`, `ACCOUNT_DISABLED` |
 
+**Safe retries:** if a `POST /orders` times out you cannot know whether it arrived. Send it again with the *same*
+`clientOrderId`: if the first one got through, the retry is `rejected` with `DUPLICATE_CLIENT_ORDER_ID` and no second
+order exists (check `GET /orders`). IDs are unique per account per trading day, for accepted orders only.
+
 ## Errors
 
 `{ "error": "...", "message": "..." }` with: `400 bad_request` (missing or invalid field), `401` (no or bad token:

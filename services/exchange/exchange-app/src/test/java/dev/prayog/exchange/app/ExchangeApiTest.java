@@ -180,6 +180,30 @@ class ExchangeApiTest {
     }
 
     @Test
+    void aRetryWithTheSameClientOrderIdCreatesNoSecondOrder() {
+        Map<String, Object> order = Map.of(
+                "symbol",
+                "INFY",
+                "side",
+                "BUY",
+                "type",
+                "LIMIT",
+                "price",
+                140_000,
+                "quantity",
+                1,
+                "clientOrderId",
+                "retry-1");
+        assertThat(place(trader("alice"), null, order).get("status").asString()).isEqualTo("resting");
+        JsonNode retry = place(trader("alice"), null, order);
+        assertThat(retry.get("status").asString()).isEqualTo("rejected");
+        assertThat(retry.get("reason").asString()).isEqualTo("DUPLICATE_CLIENT_ORDER_ID");
+        assertThat(get(trader("alice"), "/api/v1/orders")).hasSize(1);
+        // Another account may use the same id.
+        assertThat(place(trader("bob"), null, order).get("status").asString()).isEqualTo("resting");
+    }
+
+    @Test
     void aTraderIsRateLimited() {
         int created = 0;
         int limited = 0;

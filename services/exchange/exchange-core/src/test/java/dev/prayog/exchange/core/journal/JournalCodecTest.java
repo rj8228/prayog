@@ -24,6 +24,7 @@ import dev.prayog.exchange.core.ModifyOrder;
 import dev.prayog.exchange.core.NewOrder;
 import dev.prayog.exchange.core.SessionSchedule;
 import dev.prayog.exchange.core.SetAccountEnabled;
+import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.SetSessionState;
 import dev.prayog.exchange.core.journal.sbe.CancelReasonCode;
 import dev.prayog.exchange.core.journal.sbe.OrderTypeCode;
@@ -166,7 +167,8 @@ class JournalCodecTest {
                         .as(ModifyOrder::new),
                 anyLong().map(ClockTick::new),
                 Arbitraries.of(SessionState.class).map(SetSessionState::new),
-                Combinators.combine(anyLong(), Arbitraries.of(true, false)).as(SetAccountEnabled::new));
+                Combinators.combine(anyLong(), Arbitraries.of(true, false)).as(SetAccountEnabled::new),
+                Arbitraries.integers().map(SetRules::new));
     }
 
     @Provide

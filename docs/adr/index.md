@@ -18,5 +18,6 @@ decision is tested.
 | 0011 | [Admin console: admin user, self-test, live simulation control, journal views](0011-admin-console.md) | 2026-10-05 |
 | 0012 | [Trading workspace and browser strategies](0012-trading-workspace-and-strategies.md) | 2026-10-05 |
 | 0013 | [Kafka event publisher: tail the durable event log, file checkpoint, ops-tool client](0013-kafka-event-publisher.md) | 2026-10-07 |
+| 0014 | [Duplicate client order IDs are rejected per account per trading day](0014-duplicate-client-order-ids.md) | 2026-10-07 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.

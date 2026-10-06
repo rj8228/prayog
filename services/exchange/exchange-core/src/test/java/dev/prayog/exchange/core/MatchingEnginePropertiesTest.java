@@ -147,6 +147,7 @@ class MatchingEnginePropertiesTest {
     void matchesTheReferenceMatcher(@ForAll("flows") List<Command> flow) {
         ReferenceMatcher reference = new ReferenceMatcher(Map.of(ABC, INSTRUMENT));
         reference.apply(new ClockTick(T0));
+        reference.apply(new SetRules(MatchingEngine.LATEST_RULES));
         reference.apply(new SetSessionState(SessionState.OPEN));
         flow.forEach(reference::apply);
         assertThat(run(flow).events).isEqualTo(reference.events);
@@ -165,6 +166,7 @@ class MatchingEnginePropertiesTest {
     private static MatchingEngine openEngine(EventSink sink) {
         MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), sink);
         engine.apply(new ClockTick(T0));
+        engine.apply(new SetRules(MatchingEngine.LATEST_RULES));
         engine.apply(new SetSessionState(SessionState.OPEN));
         return engine;
     }
@@ -176,11 +178,13 @@ class MatchingEnginePropertiesTest {
         Arbitrary<Long> price = Arbitraries.longs().between(1_997, 2_003).map(ticks -> ticks * TICK);
         Arbitrary<Long> quantity = Arbitraries.longs().between(1, 50);
         Arbitrary<Long> orderId = Arbitraries.longs().between(1, 60);
+        // A small pool per account, so some IDs repeat: duplicates are part of the flow (ADR 0014).
+        Arbitrary<Integer> clientId = Arbitraries.integers().between(1, 40);
 
-        Arbitrary<Command> limit = Combinators.combine(account, Arbitraries.of(Side.class), price, quantity)
-                .as((a, side, p, q) -> new NewOrder("c-" + a, a, ABC, side, OrderType.LIMIT, p, q));
-        Arbitrary<Command> market = Combinators.combine(account, Arbitraries.of(Side.class), quantity)
-                .as((a, side, q) -> new NewOrder("m-" + a, a, ABC, side, OrderType.MARKET, 0, q));
+        Arbitrary<Command> limit = Combinators.combine(account, Arbitraries.of(Side.class), price, quantity, clientId)
+                .as((a, side, p, q, c) -> new NewOrder("c-" + c, a, ABC, side, OrderType.LIMIT, p, q));
+        Arbitrary<Command> market = Combinators.combine(account, Arbitraries.of(Side.class), quantity, clientId)
+                .as((a, side, q, c) -> new NewOrder("m-" + c, a, ABC, side, OrderType.MARKET, 0, q));
         Arbitrary<Command> cancel =
                 Combinators.combine(account, orderId).as((a, id) -> new CancelOrder("x-" + id, a, ABC, id));
         Arbitrary<Command> modify = Combinators.combine(account, orderId, price, quantity)

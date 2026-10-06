@@ -22,9 +22,11 @@ final class EngineFixture {
     final List<ExchangeEvent> events = new ArrayList<>();
     final MatchingEngine engine = new MatchingEngine(List.of(INSTRUMENT), events::add);
     final OrderBook book = engine.book(ABC);
+    private int nextClientId = 1; // every order gets its own client order ID, as real clients do
 
     EngineFixture() {
         engine.apply(new ClockTick(T0));
+        engine.apply(new SetRules(MatchingEngine.LATEST_RULES));
         engine.apply(new SetSessionState(SessionState.OPEN));
         events.clear();
     }
@@ -35,11 +37,11 @@ final class EngineFixture {
 
     /** Places a limit order and returns its order ID (0 if rejected). */
     long limit(long account, Side side, long price, long quantity) {
-        return place(new NewOrder("c-" + account, account, ABC, side, OrderType.LIMIT, price, quantity));
+        return place(new NewOrder("c-" + nextClientId++, account, ABC, side, OrderType.LIMIT, price, quantity));
     }
 
     long market(long account, Side side, long quantity) {
-        return place(new NewOrder("m-" + account, account, ABC, side, OrderType.MARKET, 0, quantity));
+        return place(new NewOrder("m-" + nextClientId++, account, ABC, side, OrderType.MARKET, 0, quantity));
     }
 
     void cancel(long account, long orderId) {

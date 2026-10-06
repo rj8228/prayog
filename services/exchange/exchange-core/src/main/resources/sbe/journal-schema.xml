@@ -108,6 +108,9 @@
         <field name="accountId" id="1" type="int64"/>
         <field name="enabled" id="2" type="BooleanCode"/>
     </sbe:message>
+    <sbe:message name="SetRules" id="7" description="Matching-rules version from here on (ADR 0014)">
+        <field name="version" id="1" type="int32"/>
+    </sbe:message>
 
     <!-- Events (event log), ids 20-39 -->
     <sbe:message name="OrderAccepted" id="20">

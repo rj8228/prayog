@@ -291,4 +291,94 @@ class ExchangeRulesTest {
             assertThat(lastReject()).isEqualTo(RejectReason.ACCOUNT_DISABLED);
         }
     }
+
+    /** ADR 0014: a repeated client order ID is refused, so a client may retry safely after a timeout. */
+    @Nested
+    class DuplicateClientOrderIds {
+
+        private long send(long account, String clientOrderId, long price) {
+            f.apply(new NewOrder(clientOrderId, account, ABC, BUY, OrderType.LIMIT, price, 1));
+            return f.events.getLast() instanceof OrderRejected ? 0 : f.book.bestBid();
+        }
+
+        @Test
+        void aRetryWithTheSameIdIsRejectedAndCreatesNoSecondOrder() {
+            send(1, "retry-me", 10_000);
+            int mark = f.events.size();
+            send(1, "retry-me", 10_000);
+            assertThat(f.since(mark)).hasSize(1);
+            assertThat(lastReject()).isEqualTo(RejectReason.DUPLICATE_CLIENT_ORDER_ID);
+            assertThat(f.book.ordersInIdOrder()).hasSize(1);
+        }
+
+        @Test
+        void theIdIsPerAccount() {
+            send(1, "same", 10_000);
+            send(2, "same", 9_995);
+            assertThat(f.book.ordersInIdOrder()).hasSize(2);
+        }
+
+        @Test
+        void aRejectedRequestMayBeCorrectedUnderTheSameId() {
+            send(1, "fix-me", 10_001); // off tick: rejected, so the id stays free
+            assertThat(lastReject()).isEqualTo(RejectReason.PRICE_NOT_ON_TICK);
+            send(1, "fix-me", 10_000);
+            assertThat(f.book.ordersInIdOrder()).hasSize(1);
+        }
+
+        @Test
+        void anIdStaysUsedAfterItsOrderIsGone() {
+            send(1, "gone", 10_000);
+            f.cancel(1, f.book.ordersInIdOrder().getFirst().orderId);
+            send(1, "gone", 10_000);
+            assertThat(lastReject()).isEqualTo(RejectReason.DUPLICATE_CLIENT_ORDER_ID);
+        }
+
+        @Test
+        void aNewTradingDayFreesEveryId() {
+            send(1, "daily", 10_000);
+            f.apply(new SetSessionState(SessionState.CLOSED));
+            f.apply(new SetSessionState(SessionState.OPEN));
+            send(1, "daily", 10_000);
+            assertThat(f.events.getLast()).isNotInstanceOf(OrderRejected.class);
+        }
+
+        @Test
+        void underRulesVersion1DuplicatesAreAcceptedSoOldJournalsReplayUnchanged() {
+            List<ExchangeEvent> events = new ArrayList<>();
+            MatchingEngine v1 = new MatchingEngine(List.of(EngineFixture.INSTRUMENT), events::add);
+            v1.apply(new ClockTick(T0));
+            v1.apply(new SetSessionState(SessionState.OPEN));
+            v1.apply(new NewOrder("same", 1, ABC, BUY, OrderType.LIMIT, 10_000, 1));
+            v1.apply(new NewOrder("same", 1, ABC, BUY, OrderType.LIMIT, 10_000, 1));
+            assertThat(v1.rulesVersion()).isEqualTo(1);
+            assertThat(events).noneMatch(e -> e instanceof OrderRejected);
+
+            v1.apply(new SetRules(2)); // from here on, the new rule
+            v1.apply(new NewOrder("same", 1, ABC, BUY, OrderType.LIMIT, 10_000, 1));
+            assertThat(((OrderRejected) events.getLast()).reason()).isEqualTo(RejectReason.DUPLICATE_CLIENT_ORDER_ID);
+        }
+
+        @Test
+        void rulesOnlyMoveForwardAndUnknownVersionsAreIgnored() {
+            f.apply(new SetRules(1));
+            assertThat(f.engine.rulesVersion()).isEqualTo(MatchingEngine.LATEST_RULES);
+            f.apply(new SetRules(MatchingEngine.LATEST_RULES + 1));
+            assertThat(f.engine.rulesVersion()).isEqualTo(MatchingEngine.LATEST_RULES);
+        }
+
+        @Test
+        void eachAccountRemembersABoundedNumberOfIds() {
+            ClientOrderIds ids = new ClientOrderIds(3);
+            for (String id : List.of("a", "b", "c", "d")) {
+                ids.add(7, id);
+            }
+            assertThat(ids.contains(7, "a")).as("oldest forgotten").isFalse();
+            assertThat(ids.contains(7, "b")).isTrue();
+            assertThat(ids.contains(7, "d")).isTrue();
+            ids.add(7, "d"); // re-adding does not evict
+            assertThat(ids.contains(7, "b")).isTrue();
+            assertThat(ids.contains(8, "d")).isFalse();
+        }
+    }
 }

@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.agrona.DirectBuffer;
 import org.agrona.ExpandableDirectByteBuffer;
 
 /**
@@ -20,6 +21,11 @@ import org.agrona.ExpandableDirectByteBuffer;
  * missing (a crash between the two flushes) is appended to it, so both logs agree again before trading resumes.
  * Every replayed event is also handed to {@code replayed}, so derived state (the market-data book, open-order views)
  * can be rebuilt from the same stream.
+ *
+ * <p><b>Verified, not trusted.</b> Every replayed event that the event log already holds must match it byte for byte.
+ * A difference means the engine no longer reproduces its own history (a rule changed without {@code SetRules}, a
+ * non-deterministic bug): recovery refuses to start rather than trade on a book that differs from what clients were
+ * told. The event log is derived data; see the runbook for rebuilding it from the input journal.
  */
 public final class JournalRecovery {
 
@@ -102,10 +108,21 @@ public final class JournalRecovery {
         ExpandableDirectByteBuffer buffer = new ExpandableDirectByteBuffer(1024);
         SwitchingSink sink = new SwitchingSink();
         State state = new State();
+        JournalTailer recorded = new JournalTailer(dir, JournalHandler.EVENTS, 1);
+        RecordMatcher matcher = new RecordMatcher();
 
         sink.target = event -> {
             state.lastEventSeq = event.seq();
-            if (event.seq() > eventLogEnd) {
+            if (event.seq() <= eventLogEnd) {
+                int length = codec.encode(event, buffer, 0);
+                matcher.expect(event, buffer, length);
+                try {
+                    recorded.poll(event.seq(), 1, matcher);
+                } catch (IOException e) {
+                    throw new IllegalStateException("could not read the event log", e);
+                }
+                matcher.check();
+            } else {
                 try {
                     int length = codec.encode(event, buffer, 0);
                     events.append(event.seq(), buffer, 0, length);
@@ -141,6 +158,7 @@ public final class JournalRecovery {
             throw new IllegalStateException("event log ends at seq " + eventLogEnd
                     + " but replaying the input journal only produces up to " + state.lastEventSeq);
         }
+        recorded.close();
         events.flush();
         return new Recovered(
                 state.setup,
@@ -150,6 +168,57 @@ public final class JournalRecovery {
                 state.lastEventSeq,
                 state.lastSimTime,
                 state.repaired);
+    }
+
+    /** Compares one recorded event-log record with the replayed event's encoding. */
+    private static final class RecordMatcher implements RecordVisitor {
+        private ExchangeEvent expected;
+        private ExpandableDirectByteBuffer expectedBytes;
+        private int expectedLength;
+        private boolean seen;
+        private String problem;
+
+        void expect(ExchangeEvent event, ExpandableDirectByteBuffer bytes, int length) {
+            expected = event;
+            expectedBytes = bytes;
+            expectedLength = length;
+            seen = false;
+            problem = null;
+        }
+
+        @Override
+        public void onRecord(long seq, DirectBuffer buffer, int offset, int length) {
+            seen = true;
+            if (seq != expected.seq()) {
+                problem = "the event log has seq " + seq + " where replay produced seq " + expected.seq();
+            } else if (!sameBytes(buffer, offset, length)) {
+                problem = "event " + seq + " differs: recorded " + new JournalCodec().decodeEvent(buffer, offset)
+                        + ", replayed " + expected;
+            }
+        }
+
+        private boolean sameBytes(DirectBuffer buffer, int offset, int length) {
+            if (length != expectedLength) {
+                return false;
+            }
+            for (int i = 0; i < length; i++) {
+                if (buffer.getByte(offset + i) != expectedBytes.getByte(i)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        void check() {
+            if (!seen) {
+                problem = "the event log has no record for seq " + expected.seq();
+            }
+            if (problem != null) {
+                throw new IllegalStateException("replaying the input journal does not reproduce the event log: "
+                        + problem + ". The engine's rules changed without a SetRules command, or replay is not"
+                        + " deterministic. Refusing to start.");
+            }
+        }
     }
 
     private static final class State {

@@ -35,6 +35,10 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] Trading workspace: drag, resize, swap, presets, new panels, one-click, shortcuts, explain mode — ADR 0012
 - [x] Strategies in the browser: six strategies with risk limits, own accounts, live P&L and logs — ADR 0012
 
+## Step 2 additions (2026-10-07)
+- [x] Duplicate client order IDs rejected per account per trading day — ADR 0014
+- [ ] Engine snapshots (recovery replays from the latest snapshot)
+
 ## M4 Hardening layers
 - [ ] S9 Benchmarks (4 h)
 - [ ] S14 Realism checks (4 h)

@@ -21,6 +21,7 @@ import dev.prayog.exchange.core.ModifyOrder;
 import dev.prayog.exchange.core.NewOrder;
 import dev.prayog.exchange.core.SessionSchedule;
 import dev.prayog.exchange.core.SetAccountEnabled;
+import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.SetSessionState;
 import dev.prayog.exchange.core.journal.sbe.BookUpdateDecoder;
 import dev.prayog.exchange.core.journal.sbe.BookUpdateEncoder;
@@ -53,6 +54,8 @@ import dev.prayog.exchange.core.journal.sbe.SessionStateChangedEncoder;
 import dev.prayog.exchange.core.journal.sbe.SessionStateCode;
 import dev.prayog.exchange.core.journal.sbe.SetAccountEnabledDecoder;
 import dev.prayog.exchange.core.journal.sbe.SetAccountEnabledEncoder;
+import dev.prayog.exchange.core.journal.sbe.SetRulesDecoder;
+import dev.prayog.exchange.core.journal.sbe.SetRulesEncoder;
 import dev.prayog.exchange.core.journal.sbe.SetSessionStateDecoder;
 import dev.prayog.exchange.core.journal.sbe.SetSessionStateEncoder;
 import dev.prayog.exchange.core.journal.sbe.SideCode;
@@ -86,6 +89,7 @@ public final class JournalCodec {
     private final ClockTickEncoder clockTickEncoder = new ClockTickEncoder();
     private final SetSessionStateEncoder setSessionStateEncoder = new SetSessionStateEncoder();
     private final SetAccountEnabledEncoder setAccountEnabledEncoder = new SetAccountEnabledEncoder();
+    private final SetRulesEncoder setRulesEncoder = new SetRulesEncoder();
 
     private final NewOrderDecoder newOrderDecoder = new NewOrderDecoder();
     private final CancelOrderDecoder cancelOrderDecoder = new CancelOrderDecoder();
@@ -93,6 +97,7 @@ public final class JournalCodec {
     private final ClockTickDecoder clockTickDecoder = new ClockTickDecoder();
     private final SetSessionStateDecoder setSessionStateDecoder = new SetSessionStateDecoder();
     private final SetAccountEnabledDecoder setAccountEnabledDecoder = new SetAccountEnabledDecoder();
+    private final SetRulesDecoder setRulesDecoder = new SetRulesDecoder();
 
     private final OrderAcceptedEncoder orderAcceptedEncoder = new OrderAcceptedEncoder();
     private final OrderRejectedEncoder orderRejectedEncoder = new OrderRejectedEncoder();
@@ -177,6 +182,11 @@ public final class JournalCodec {
                         .accountId(c.accountId())
                         .enabled(c.enabled() ? BooleanCode.TRUE : BooleanCode.FALSE)
                         .encodedLength();
+            case SetRules c ->
+                setRulesEncoder
+                        .wrapAndApplyHeader(buffer, offset, headerEncoder)
+                        .version(c.version())
+                        .encodedLength();
         };
         return MessageHeaderEncoder.ENCODED_LENGTH + bodyLength;
     }
@@ -225,6 +235,10 @@ public final class JournalCodec {
                 SetAccountEnabledDecoder d = setAccountEnabledDecoder.wrapAndApplyHeader(buffer, offset, headerDecoder);
                 yield new SetAccountEnabled(d.accountId(), d.enabled() == BooleanCode.TRUE);
             }
+            case SetRulesDecoder.TEMPLATE_ID ->
+                new SetRules(setRulesDecoder
+                        .wrapAndApplyHeader(buffer, offset, headerDecoder)
+                        .version());
             default -> throw new IllegalArgumentException("not a command: message id " + templateId);
         };
     }

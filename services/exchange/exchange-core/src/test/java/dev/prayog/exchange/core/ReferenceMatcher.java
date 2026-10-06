@@ -64,6 +64,8 @@ final class ReferenceMatcher {
     private final Map<String, Instrument> instruments;
     private final List<Resting> resting = new ArrayList<>();
     private final Set<Long> disabled = new TreeSet<>();
+    private final List<String> usedToday = new ArrayList<>(); // "account/clientOrderId" of accepted orders
+    private int rules = 1;
     final List<ExchangeEvent> events = new ArrayList<>();
     private SessionState session = SessionState.CLOSED;
     private long time;
@@ -84,6 +86,7 @@ final class ReferenceMatcher {
             case ModifyOrder m -> modify(m);
             case SetSessionState s -> session(s.state());
             case SetAccountEnabled a -> account(a.accountId(), a.enabled());
+            case SetRules r -> rules = r.version() > rules && r.version() <= 2 ? r.version() : rules;
         }
     }
 
@@ -96,6 +99,8 @@ final class ReferenceMatcher {
             reason = RejectReason.ACCOUNT_DISABLED;
         } else if (session != SessionState.OPEN) {
             reason = RejectReason.SESSION_NOT_OPEN;
+        } else if (rules >= 2 && usedToday.contains(o.accountId() + "/" + o.clientOrderId())) {
+            reason = RejectReason.DUPLICATE_CLIENT_ORDER_ID;
         } else if (o.quantity() < 1 || o.quantity() > instrument.maxOrderQuantity()) {
             reason = RejectReason.INVALID_QUANTITY;
         } else if (o.type() == OrderType.MARKET) {
@@ -107,6 +112,7 @@ final class ReferenceMatcher {
             events.add(new OrderRejected(seq++, time, 0, o.clientOrderId(), o.accountId(), o.symbol(), reason));
             return;
         }
+        usedToday.add(o.accountId() + "/" + o.clientOrderId());
         long id = orderId++;
         events.add(new OrderAccepted(
                 seq++,
@@ -197,6 +203,7 @@ final class ReferenceMatcher {
         session = next;
         events.add(new SessionStateChanged(seq++, time, next));
         if (next == SessionState.CLOSED) {
+            usedToday.clear();
             sortedBySymbolThenId().forEach(r -> drop(r, CancelReason.EXPIRED));
         }
     }

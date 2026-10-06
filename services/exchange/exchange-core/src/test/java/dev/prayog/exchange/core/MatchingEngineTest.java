@@ -24,6 +24,7 @@ class MatchingEngineTest {
     private static final String ABC = "ABC";
 
     private final List<ExchangeEvent> events = new ArrayList<>();
+    private int nextClientId = 1;
     private final MatchingEngine engine =
             new MatchingEngine(List.of(new Instrument(ABC, 5, 1_000_000, 10_000, 20)), events::add);
     private final OrderBook book = engine.book(ABC);
@@ -56,7 +57,7 @@ class MatchingEngineTest {
         limit(7, BUY, 10_000, 10);
 
         assertThat(events)
-                .containsExactly(new OrderAccepted(2, T0, 1, "c-7", 7, ABC, BUY, OrderType.LIMIT, 10_000, 10));
+                .containsExactly(new OrderAccepted(2, T0, 1, "c-1", 7, ABC, BUY, OrderType.LIMIT, 10_000, 10));
     }
 
     @Test
@@ -187,7 +188,7 @@ class MatchingEngineTest {
     }
 
     private void limit(long account, Side side, long price, long quantity) {
-        submit(new NewOrder("c-" + account, account, ABC, side, OrderType.LIMIT, price, quantity));
+        submit(new NewOrder("c-" + nextClientId++, account, ABC, side, OrderType.LIMIT, price, quantity));
     }
 
     private void submit(NewOrder order) {

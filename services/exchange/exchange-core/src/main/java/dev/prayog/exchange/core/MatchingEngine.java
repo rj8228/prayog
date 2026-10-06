@@ -33,9 +33,21 @@ import java.util.TreeMap;
  */
 public final class MatchingEngine {
 
+    /**
+     * Matching-rules versions (ADR 0014). A new engine starts at 1 so old journals replay unchanged; the exchange
+     * journals {@link SetRules} to move to the latest.
+     *
+     * <ul>
+     *   <li>1: S4-S13 rules.
+     *   <li>2: duplicate client order IDs are rejected per account per trading day.
+     * </ul>
+     */
+    public static final int LATEST_RULES = 2;
+
     private final Map<String, Instrument> instruments = new HashMap<>();
     private final NavigableMap<String, OrderBook> books = new TreeMap<>();
     private final Set<Long> disabledAccounts = new HashSet<>(); // lookups only, never iterated
+    private final ClientOrderIds clientOrderIds = new ClientOrderIds();
     private final SessionSchedule schedule; // null: sessions change only by ops command
     private final EventSink sink;
 
@@ -45,6 +57,7 @@ public final class MatchingEngine {
     private long nextEventSeq = 1;
     private long nextOrderId = 1;
     private long nextTradeId = 1;
+    private int rulesVersion = 1;
 
     /** Set by {@link #match} when it stopped because the next fill would have been with the same account. */
     private boolean stoppedBySelfTrade;
@@ -78,6 +91,19 @@ public final class MatchingEngine {
             case ClockTick tick -> tick(tick.simTime());
             case SetSessionState state -> setSession(state.state());
             case SetAccountEnabled account -> setAccountEnabled(account.accountId(), account.enabled());
+            case SetRules rules -> setRules(rules.version());
+        }
+    }
+
+    /** The matching-rules version in force. */
+    public int rulesVersion() {
+        return rulesVersion;
+    }
+
+    // Moves forward only: going back would change the meaning of orders already accepted. Emits no event.
+    private void setRules(int version) {
+        if (version > rulesVersion && version <= LATEST_RULES) {
+            rulesVersion = version;
         }
     }
 
@@ -89,6 +115,7 @@ public final class MatchingEngine {
             return;
         }
 
+        clientOrderIds.add(order.accountId(), order.clientOrderId());
         long orderId = nextOrderId++;
         sink.accept(new OrderAccepted(
                 nextEventSeq++,
@@ -271,6 +298,7 @@ public final class MatchingEngine {
         session = next;
         sink.accept(new SessionStateChanged(nextEventSeq++, simTime, next));
         if (next == SessionState.CLOSED) {
+            clientOrderIds.clear(); // a new day: client order IDs may be reused
             // Every order is a DAY order: whatever is still open expires at the close.
             for (OrderBook book : books.values()) {
                 for (RestingOrder order : book.ordersInIdOrder()) {
@@ -319,6 +347,9 @@ public final class MatchingEngine {
         }
         if (session != SessionState.OPEN) {
             return RejectReason.SESSION_NOT_OPEN;
+        }
+        if (rulesVersion >= 2 && clientOrderIds.contains(order.accountId(), order.clientOrderId())) {
+            return RejectReason.DUPLICATE_CLIENT_ORDER_ID;
         }
         if (order.quantity() <= 0 || order.quantity() > instrument.maxOrderQuantity()) {
             return RejectReason.INVALID_QUANTITY;

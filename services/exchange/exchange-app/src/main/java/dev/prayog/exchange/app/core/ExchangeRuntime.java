@@ -9,6 +9,7 @@ import dev.prayog.exchange.core.Command;
 import dev.prayog.exchange.core.EventSink;
 import dev.prayog.exchange.core.MatchingEngine;
 import dev.prayog.exchange.core.SessionSchedule;
+import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.journal.EngineSetup;
 import dev.prayog.exchange.core.journal.FileJournal;
 import dev.prayog.exchange.core.journal.JournalHandler;
@@ -98,6 +99,16 @@ public final class ExchangeRuntime implements AutoCloseable {
                 .then(journal)
                 .then(outbound)
                 .start();
+        // Bring the engine to the latest matching rules at a recorded point in the input (ADR 0014): history before
+        // it replays under the rules it was made with. A no-op command when the engine is already there.
+        try {
+            submit(new SetRules(MatchingEngine.LATEST_RULES)).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while setting the matching rules", e);
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            throw new IOException("could not set the matching rules", e);
+        }
         clock = new SimClock(startSim, props.clock().multiplier(), System::nanoTime);
         ticker = new ClockTicker(clock, pipeline, ClockTicker.DEFAULT_INTERVAL_MILLIS);
         ticker.start();
