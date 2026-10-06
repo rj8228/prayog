@@ -38,6 +38,8 @@
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
         <build-helper-maven-plugin.version>3.6.2</build-helper-maven-plugin.version>
         <json-schema-validator.version>3.0.8</json-schema-validator.version>
+        <!-- S20: exchange rules as Given/When/Then scenarios (Cucumber-JVM, approved in section 8). -->
+        <cucumber.version>8.0.4</cucumber.version>
         <!-- Agrona 2.x reads memory through jdk.internal.misc.Unsafe; every JVM that loads it needs this export. -->
         <agrona.jvm.args>--add-exports java.base/jdk.internal.misc=ALL-UNNAMED</agrona.jvm.args>
         <spotless.version>3.10.3</spotless.version>
@@ -46,6 +48,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.cucumber</groupId>
+                <artifactId>cucumber-bom</artifactId>
+                <version>${cucumber.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>dev.prayog</groupId>
                 <artifactId>contracts</artifactId>

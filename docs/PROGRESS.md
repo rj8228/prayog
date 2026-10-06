@@ -42,7 +42,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 ## M4 Hardening layers
 - [x] S9 Benchmarks (4 h) — docs/benchmarks.md
 - [ ] S14 Realism checks (4 h)
-- [ ] S20 Exchange rules as Cucumber scenarios (5 h)
+- [x] S20 Exchange rules as Cucumber scenarios (5 h) — ADR 0018
 - [ ] S21 Observability (4 h)
 - [ ] S22 Docs and demo (5 h)
 - [ ] Multi-arch images
