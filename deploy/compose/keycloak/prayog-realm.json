@@ -109,6 +109,32 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "prayog-ops-tool",
+      "name": "Ops tool",
+      "description": "Scripts that run ops and admin actions (make e2e, make ops-*): confidential client, client credentials. Local development only.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${PRAYOG_OPS_TOOL_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience prayog-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "prayog-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -153,6 +179,12 @@
       "enabled": true,
       "serviceAccountClientId": "prayog-agents",
       "realmRoles": ["default-roles-prayog", "bot"]
+    },
+    {
+      "username": "service-account-prayog-ops-tool",
+      "enabled": true,
+      "serviceAccountClientId": "prayog-ops-tool",
+      "realmRoles": ["default-roles-prayog", "ops", "admin"]
     }
   ]
 }

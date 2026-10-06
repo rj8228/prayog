@@ -8,6 +8,7 @@ import dev.prayog.contracts.event.OrderCancelled;
 import dev.prayog.contracts.event.OrderRejected;
 import dev.prayog.exchange.app.core.CommandResult;
 import dev.prayog.exchange.app.core.ExchangeRuntime;
+import dev.prayog.exchange.app.kafka.KafkaEventPublisher;
 import dev.prayog.exchange.app.market.MarketHub;
 import dev.prayog.exchange.app.market.MarketMessages.Ticker;
 import dev.prayog.exchange.app.security.Trader;
@@ -50,6 +51,7 @@ public final class SelfTest {
         checks.add(timed("No market-data publishing errors", this::noPublishErrors));
         checks.add(timed("Simulated traders are trading", this::tradesHappening));
         checks.add(timed("Journal replays to the same events (online)", this::onlineReplay));
+        checks.add(timed("Kafka publisher is keeping up", this::kafkaKeepingUp));
         return checks;
     }
 
@@ -142,6 +144,24 @@ public final class SelfTest {
         return report.commands() + " commands replayed; events 1.." + report.comparedUpTo() + " identical (sha256 "
                 + report.recorded().sha256().substring(0, 12) + "...)";
     }
+
+    /** Off counts as fine (tests, tools); on, it must be connected and less than ~10 s of events behind. */
+    private String kafkaKeepingUp() throws InterruptedException {
+        KafkaEventPublisher.Status k = exchange.status().kafka();
+        if (!k.enabled()) {
+            return "publishing is off (no bootstrap configured)";
+        }
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (!(k.connected() && k.lag() < MAX_KAFKA_LAG) && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+            k = exchange.status().kafka();
+        }
+        check(k.connected(), "not connected to Kafka (" + k.errors() + " send errors); events wait in the journal");
+        check(k.lag() < MAX_KAFKA_LAG, k.lag() + " events behind the journal");
+        return "published up to event " + k.publishedSeq() + ", " + k.lag() + " behind";
+    }
+
+    private static final long MAX_KAFKA_LAG = 50_000;
 
     private static void check(boolean condition, String message) {
         if (!condition) {

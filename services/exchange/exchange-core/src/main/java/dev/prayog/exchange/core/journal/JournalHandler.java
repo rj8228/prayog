@@ -33,6 +33,10 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
     private final JournalCodec codec = new JournalCodec();
     private final ExpandableDirectByteBuffer buffer = new ExpandableDirectByteBuffer(1024);
 
+    // The last event seq known to be on disk. Written by the journal thread after each flush, read by followers of
+    // the event log (the Kafka publisher), which must never act on an event a crash could still erase.
+    private volatile long durableEventSeq;
+
     /**
      * Starts a new recorded session: writes {@code setup} as record 0 of the input journal and flushes it.
      *
@@ -45,6 +49,7 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
         }
         this.input = input;
         this.events = events;
+        this.durableEventSeq = events.lastSeq();
         int length = codec.encode(setup, buffer, 0);
         input.append(SETUP_SEQ, buffer, 0, length);
         input.flush();
@@ -53,6 +58,7 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
     private JournalHandler(Journal input, Journal events) {
         this.input = input;
         this.events = events;
+        this.durableEventSeq = events.lastSeq();
     }
 
     /**
@@ -92,7 +98,13 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
         if (endOfBatch) {
             input.flush();
             events.flush();
+            durableEventSeq = events.lastSeq();
         }
+    }
+
+    /** The highest event seq that is flushed to disk (-1 if none). Safe to call from any thread. */
+    public long durableEventSeq() {
+        return durableEventSeq;
     }
 
     /** Flushes and closes both journals. Call after the pipeline has stopped. */

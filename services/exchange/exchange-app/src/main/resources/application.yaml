@@ -42,6 +42,10 @@ prayog:
     market-data:
       trade-history: 2000
       subscriber-buffer: 10000
+    kafka:
+      # Empty: publishing off. In Compose: kafka:9092 (inside the network).
+      bootstrap: ${PRAYOG_KAFKA_BOOTSTRAP:}
+      topic: prayog.exchange.events.v1
 
 management:
   endpoints:
@@ -60,3 +64,5 @@ management:
 logging:
   level:
     dev.prayog: INFO
+    # The Kafka client logs every config value at INFO on each (re)connect.
+    org.apache.kafka: WARN

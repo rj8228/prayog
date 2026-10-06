@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end correctness of the running stack (`make e2e`):
 #   1. market and bot checks through the public API (tests/e2e/market_check.py)
-#   2. deterministic replay of the LIVE journal: stop the exchange, replay its journal in a one-off container,
+#   2. Kafka chaos: stop Kafka mid-session, start it again, no event lost (tests/e2e/kafka_check.py)
+#   3. deterministic replay of the LIVE journal: stop the exchange, replay its journal in a one-off container,
 #      require the same event-log checksum, start the exchange again.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
@@ -11,6 +12,10 @@ status=0
 
 echo "== Market and bots"
 uv run python tests/e2e/market_check.py --seconds "$SECONDS_TO_WATCH" || status=1
+
+echo
+echo "== Kafka outage"
+uv run python tests/e2e/kafka_check.py --outage "${E2E_KAFKA_OUTAGE:-8}" || status=1
 
 echo
 echo "== Replay of the live journal"

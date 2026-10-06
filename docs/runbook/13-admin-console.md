@@ -11,7 +11,7 @@ in the header. admin1 also trades like any trader on the Market tab.
 | Simulated traders | **Volatile** / **Calm** | Wider spreads and bigger moves within seconds |
 | | **News +3%** on INFY | INFY trades about 3% higher within a few seconds |
 | | **Pause** / **Resume** | The market maker's quotes disappear and trading stops; then resumes |
-| Self-test | **Run checks** | `6/6 checks passed`, including an online replay of the live journal |
+| Self-test | **Run checks** | `7/7 checks passed`, including an online replay of the live journal and the Kafka publisher's lag |
 | Health | Watch | Input seq rising, ring nearly empty, publish errors 0, latency p50 a few ms |
 | Accounts | **Cancel all** / **Disable** / **Enable** | That account's orders cancelled; disabled accounts get `ACCOUNT_DISABLED` |
 | Event replay | Pick a symbol, **Load from journal**, **Play** | The book and price replay exactly as they happened |

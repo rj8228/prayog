@@ -3,6 +3,7 @@ package dev.prayog.exchange.app.core;
 import dev.prayog.contracts.SessionState;
 import dev.prayog.exchange.app.account.AccountHub;
 import dev.prayog.exchange.app.config.ExchangeProperties;
+import dev.prayog.exchange.app.kafka.KafkaEventPublisher;
 import dev.prayog.exchange.app.market.MarketHub;
 import dev.prayog.exchange.core.Command;
 import dev.prayog.exchange.core.EventSink;
@@ -49,6 +50,7 @@ public final class ExchangeRuntime implements AutoCloseable {
     private final SessionSchedule schedule;
     private final ScheduledExecutorService housekeeping;
     private final MarketHub market;
+    private final KafkaEventPublisher kafka; // null when publishing is off
     private final boolean recovered;
     private final long startedAfterSeq;
     private volatile long closedSinceWallNanos = -1;
@@ -99,6 +101,15 @@ public final class ExchangeRuntime implements AutoCloseable {
         clock = new SimClock(startSim, props.clock().multiplier(), System::nanoTime);
         ticker = new ClockTicker(clock, pipeline, ClockTicker.DEFAULT_INTERVAL_MILLIS);
         ticker.start();
+        kafka = props.kafka() != null && props.kafka().enabled()
+                ? new KafkaEventPublisher(
+                                props.journalDir(),
+                                journal::durableEventSeq,
+                                KafkaEventPublisher.producers(props.kafka().bootstrap()),
+                                KafkaEventPublisher.Settings.defaults(
+                                        props.kafka().topic()))
+                        .start()
+                : null;
         housekeeping = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "prayog-housekeeping");
             t.setDaemon(true);
@@ -160,7 +171,8 @@ public final class ExchangeRuntime implements AutoCloseable {
                 outbound.publishErrors(),
                 clock.now(),
                 clock.multiplier(),
-                market.session());
+                market.session(),
+                kafka != null ? kafka.status() : new KafkaEventPublisher.Status(false, false, 0, 0, 0));
     }
 
     /** Operational state for the ops page and debugging. */
@@ -173,11 +185,15 @@ public final class ExchangeRuntime implements AutoCloseable {
             long publishErrors,
             long simTime,
             int clockMultiplier,
-            SessionState session) {}
+            SessionState session,
+            KafkaEventPublisher.Status kafka) {}
 
     @Override
     public void close() throws Exception {
         housekeeping.shutdownNow();
+        if (kafka != null) {
+            kafka.close(); // first: it only reads the journal, and saves its checkpoint on the way out
+        }
         ticker.close();
         pipeline.close(); // drains everything already submitted through the journal
         journal.close();

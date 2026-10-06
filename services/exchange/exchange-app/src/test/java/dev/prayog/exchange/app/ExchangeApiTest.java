@@ -325,7 +325,7 @@ class ExchangeApiTest {
                 .getResponseBody();
         java.util.Map<String, Boolean> results = new java.util.LinkedHashMap<>();
         checks.forEach(c -> results.put(c.get("name").asString(), c.get("ok").asBoolean()));
-        assertThat(results).hasSize(6);
+        assertThat(results).hasSize(7);
         // No simulated traders run in this test, so "traders are trading" may fail; everything else must pass.
         results.forEach((name, ok) -> {
             if (!name.startsWith("Simulated traders")) {

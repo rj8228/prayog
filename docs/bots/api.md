@@ -76,8 +76,18 @@ Updates sent while you were disconnected are not replayed: reconcile with `GET /
 
 | Method and path | Body | Effect |
 |---|---|---|
-| `GET /api/v1/ops/status` | | Recovery info, last input seq, ring capacity and free slots, publish errors, sim time, session |
+| `GET /api/v1/ops/status` | | Recovery info, last input seq, ring capacity and free slots, publish errors, sim time, session, Kafka publisher (`kafka`: enabled, connected, publishedSeq, lag, errors) |
 | `POST /api/v1/ops/session` | `{state: OPEN\|HALTED\|CLOSED}` | Global kill switch; HALTED allows cancels only; CLOSED expires all orders |
 | `POST /api/v1/ops/accounts/{accountId}` | `{enabled: false}` | Per-account kill switch: cancels its orders, refuses new ones |
 | `PUT /api/v1/ops/clock` | `{multiplier: 1..10000}` | Sim speed |
 | `POST /api/v1/ops/clock/next-open` | | Jump to the next day's open |
+
+## Event stream (Kafka)
+
+Every exchange event, in the shape of `contracts/schemas/events/exchange-event.schema.json`, on topic
+`prayog.exchange.events.v1` (3 partitions). From containers use `kafka:9092`, from the host `localhost:9094`.
+
+- **Key:** the symbol, so one symbol's events are in order on one partition. Session-wide events
+  (`SessionStateChanged`) use the empty key.
+- **Event id:** `seq`, also in the `eventId` header. Delivery is at least once: skip any id you have already applied.
+- **Order:** by `seq` within a partition; across partitions, sort by `seq` if you need it.

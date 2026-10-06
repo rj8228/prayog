@@ -121,6 +121,7 @@ services:
       # Substituted into the realm file during import (${...} placeholders); never committed.
       PRAYOG_BOT_DEMO_SECRET: ${PRAYOG_BOT_DEMO_SECRET:?set in .env}
       PRAYOG_AGENTS_SECRET: ${PRAYOG_AGENTS_SECRET:?set in .env}
+      PRAYOG_OPS_TOOL_SECRET: ${PRAYOG_OPS_TOOL_SECRET:?set in .env}
       PRAYOG_TRADER1_PASSWORD: ${PRAYOG_TRADER1_PASSWORD:?set in .env}
       PRAYOG_OPS1_PASSWORD: ${PRAYOG_OPS1_PASSWORD:?set in .env}
       PRAYOG_ADMIN1_PASSWORD: ${PRAYOG_ADMIN1_PASSWORD:?set in .env}
@@ -186,6 +187,8 @@ services:
       kafka-init: { condition: service_completed_successfully }
     environment:
       PRAYOG_JOURNAL_DIR: /data/journal
+      # S15: every event goes to Kafka, from the journal, off the order path (ADR 0013).
+      PRAYOG_KAFKA_BOOTSTRAP: kafka:9092
       # Keys come straight from Keycloak inside the network; tokens still name the public issuer.
       PRAYOG_JWK_SET_URI: http://keycloak:8080/realms/prayog/protocol/openid-connect/certs
       PRAYOG_JWT_ISSUER: http://auth.prayog.localhost/realms/prayog

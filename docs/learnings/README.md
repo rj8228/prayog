@@ -41,6 +41,7 @@ Interactive explainers in [`docs/overview/`](../overview/index.md), each with a 
 | S8 Journal and replay | [S08-journal-and-replay.md](S08-journal-and-replay.md) | Write-ahead journal, fsync and group commit, torn writes and CRC, SBE, deterministic replay checksums |
 | S10–S13 Live market | [S10-S13-live-market.md](S10-S13-live-market.md) | Gateway, recovery, derived market data, feeds and gaps, account ids, market making, reconciliation, e2e correctness |
 | Step 1.5 Admin, workspace, strategies | [step-1.5-admin-workspace-strategies.md](step-1.5-admin-workspace-strategies.md) | Admin role and self-test, online replay, live simulation control, grid layouts, average-cost P&L, pure strategies, pre-trade risk |
+| S15 Kafka publisher | [S15-kafka-publisher.md](S15-kafka-publisher.md) | Topics, partitions and offsets, delivery guarantees, idempotent producers, contiguous acked checkpoint, journal as outbox, chaos tests |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 
 ## Themes so far

@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: help env env-upgrade users up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
+.PHONY: help env env-upgrade users ops-token up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
@@ -42,6 +42,11 @@ env-upgrade: ## Add variables that are in .env.example but missing from .env (ra
 
 users: ## Ensure Keycloak roles and seeded users (admin1...) exist on the running stack; keeps all data
 	./deploy/compose/users.sh
+
+ops-token: ## Print an access token with roles ops and admin (client prayog-ops-tool), e.g. T=$$(make -s ops-token)
+	@set -a; . ./.env; set +a; curl -sf -d grant_type=client_credentials -d client_id=prayog-ops-tool \
+		-d client_secret="$$PRAYOG_OPS_TOOL_SECRET" http://auth.prayog.localhost/realms/prayog/protocol/openid-connect/token | \
+		python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
 
 down: ## Stop the stack (data volumes are kept)
 	$(COMPOSE) --profile '*' down

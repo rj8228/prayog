@@ -23,7 +23,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S11 Market data (5 h) — ADR 0009
 - [x] S12 Python SDK and sample bot (5 h) — ADR 0010
 - [x] S13 Simulated traders (7 h) — ADR 0010
-- [ ] S15 Kafka publisher (5 h)
+- [x] S15 Kafka publisher (5 h) — ADR 0013
 - [ ] S16 Post-trade service (7 h)
 - [ ] S17 Leaderboard (3 h)
 - [ ] S18 Trading terminal (8 h) — first slice done (ADR 0010); Step 1.5 added the draggable workspace, watchlist, depth chart, positions & P&L, one-click trading, shortcuts and explain mode (ADR 0012); remaining: server-backed blotter and P&L with S16/S19

@@ -51,6 +51,40 @@ ensure_role admin "Admin console: self-test, simulation control, accounts, journ
 ensure_user admin1 Admin One "$PRAYOG_ADMIN1_PASSWORD" trader ops admin
 echo "  admin1 ready (roles trader, ops, admin)"
 
+# A confidential client for scripts that act as ops/admin (make e2e). Its service account holds ops and admin.
+ensure_service_client() { # clientId secret roles...
+  local client=$1 secret=$2; shift 2
+  local id
+  id=$(curl -sf "${auth[@]}" "$REALM/clients?clientId=$client" |
+    python3 -c 'import json,sys; c=json.load(sys.stdin); print(c[0]["id"] if c else "")')
+  local body="{\"clientId\":\"$client\",\"enabled\":true,\"publicClient\":false,\"secret\":\"$secret\",
+    \"standardFlowEnabled\":false,\"directAccessGrantsEnabled\":false,\"serviceAccountsEnabled\":true,
+    \"protocolMappers\":[{\"name\":\"audience prayog-api\",\"protocol\":\"openid-connect\",
+      \"protocolMapper\":\"oidc-audience-mapper\",\"config\":{\"included.client.audience\":\"prayog-api\",
+      \"access.token.claim\":\"true\",\"id.token.claim\":\"false\",\"introspection.token.claim\":\"true\"}}]}"
+  if [ -z "$id" ]; then
+    curl -sf "${auth[@]}" "${json[@]}" -d "$body" "$REALM/clients" >/dev/null
+    id=$(curl -sf "${auth[@]}" "$REALM/clients?clientId=$client" |
+      python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')
+    echo "  created client $client"
+  else
+    # Keep the secret in step with .env.
+    curl -sf -X PUT "${auth[@]}" "${json[@]}" -d "{\"id\":\"$id\",\"clientId\":\"$client\",\"secret\":\"$secret\"}" \
+      "$REALM/clients/$id" >/dev/null
+  fi
+  local sa
+  sa=$(curl -sf "${auth[@]}" "$REALM/clients/$id/service-account-user" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  local roles="[" sep=""
+  for role in "$@"; do
+    roles+="$sep$(curl -sf "${auth[@]}" "$REALM/roles/$role")"; sep=","
+  done
+  roles+="]"
+  curl -sf "${auth[@]}" "${json[@]}" -d "$roles" "$REALM/users/$sa/role-mappings/realm" >/dev/null
+}
+ensure_service_client prayog-ops-tool "$PRAYOG_OPS_TOOL_SECRET" ops admin
+echo "  prayog-ops-tool ready (roles ops, admin)"
+
 # An optional personal admin, named in .env only (PRAYOG_EXTRA_ADMIN_USER and PRAYOG_EXTRA_ADMIN_PASSWORD).
 if [ -n "${PRAYOG_EXTRA_ADMIN_USER:-}" ] && [ -n "${PRAYOG_EXTRA_ADMIN_PASSWORD:-}" ]; then
   ensure_user "$PRAYOG_EXTRA_ADMIN_USER" Admin "$PRAYOG_EXTRA_ADMIN_USER" "$PRAYOG_EXTRA_ADMIN_PASSWORD" trader ops admin

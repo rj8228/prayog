@@ -69,7 +69,11 @@ class JournalHandlerTest {
         PipelineHandler responses = (CommandSlot slot, boolean endOfBatch) -> {
             long lastEvent =
                     slot.events().isEmpty() ? -1 : slot.events().getLast().seq();
-            boolean durable = slot.inputSeq() <= input.durableSeq.get() && lastEvent <= events.durableSeq.get();
+            boolean durable = slot.inputSeq() <= input.durableSeq.get()
+                    && lastEvent <= events.durableSeq.get()
+                    // what followers of the event log are told is durable: covers this slot, never more than disk
+                    && lastEvent <= journal.durableEventSeq()
+                    && journal.durableEventSeq() <= events.durableSeq.get();
             seen.add(new Seen(slot.inputSeq(), slot.command(), List.copyOf(slot.events()), durable));
         };
 

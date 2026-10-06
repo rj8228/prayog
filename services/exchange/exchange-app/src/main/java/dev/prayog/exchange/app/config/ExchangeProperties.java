@@ -23,7 +23,8 @@ public record ExchangeProperties(
         Clock clock,
         Pipeline pipeline,
         RateLimit rateLimit,
-        MarketData marketData) {
+        MarketData marketData,
+        Kafka kafka) {
 
     /** One listed symbol. Prices in paise. */
     public record InstrumentConfig(
@@ -66,6 +67,16 @@ public record ExchangeProperties(
      * @param subscriberBuffer messages a slow WebSocket client may fall behind before it is disconnected
      */
     public record MarketData(int tradeHistory, int subscriberBuffer) {}
+
+    /**
+     * Event publishing to Kafka (S15). An empty {@code bootstrap} turns it off (unit tests, tools); the journal still
+     * holds every event, and the publisher catches up from it once enabled.
+     */
+    public record Kafka(String bootstrap, String topic) {
+        public boolean enabled() {
+            return bootstrap != null && !bootstrap.isBlank();
+        }
+    }
 
     public List<Instrument> toInstruments() {
         return instruments.stream().map(InstrumentConfig::toInstrument).toList();

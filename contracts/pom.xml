@@ -22,10 +22,10 @@
             <artifactId>json-schema-validator</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- EventJson: the Kafka event format shared by the exchange and post-trade. -->
         <dependency>
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
