@@ -200,6 +200,8 @@ services:
     volumes:
       - exchange-journal:/data/journal
     mem_limit: 768m
+    # A crash restarts it; recovery rebuilds the market from the snapshot and journal (docs/failure-modes.md).
+    restart: unless-stopped
     healthcheck:
       # bash, not sh: the image's sh is dash, which has no /dev/tcp.
       test:
@@ -264,6 +266,7 @@ services:
       PRAYOG_JWT_ISSUER: http://auth.prayog.localhost/realms/prayog
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
     mem_limit: 512m
+    restart: unless-stopped
     healthcheck:
       test:
         - CMD
