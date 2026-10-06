@@ -2,7 +2,8 @@
 # The trading web app: built with Vite, served as static files by nginx (non-root, port 8080).
 # Built from the repository root: docker build -f deploy/docker/web.Dockerfile .
 
-FROM node:22.23.3-alpine AS build
+# The static bundle is built once on the build machine's platform and served by nginx on each target platform.
+FROM --platform=$BUILDPLATFORM node:22.23.3-alpine AS build
 WORKDIR /src
 # Corepack fetches the pnpm version pinned in package.json; without this it waits for a yes/no answer.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

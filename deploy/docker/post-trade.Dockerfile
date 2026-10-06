@@ -2,7 +2,8 @@
 # The post-trade service (S16): multi-stage, JRE runtime, non-root. Also runs its own migrations as a one-off job.
 # Built from the repository root: docker build -f deploy/docker/post-trade.Dockerfile .
 
-FROM eclipse-temurin:21.0.12.1_1-jdk AS build
+# The jar is built once on the build machine's platform and copied into each target platform's runtime image.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:21.0.12.1_1-jdk AS build
 WORKDIR /src
 COPY mvnw pom.xml ./
 COPY .mvn .mvn

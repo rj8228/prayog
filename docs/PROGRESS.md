@@ -45,5 +45,5 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S20 Exchange rules as Cucumber scenarios (5 h) — ADR 0018
 - [ ] S21 Observability (4 h)
 - [ ] S22 Docs and demo (5 h)
-- [ ] Multi-arch images
+- [x] Multi-arch images — ADR 0021 (`make images`, CI job)
 - [x] Phase 2 items pulled into scope (agent rate-limit tier) — ADR 0020

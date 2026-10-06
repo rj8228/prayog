@@ -41,6 +41,16 @@ jobs:
       # makes a determinism break visible by name.
       - run: make replay-check
 
+  images:
+    name: Multi-arch images (amd64, arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # arm64 runtime stages run under QEMU; jars and the web bundle are built once natively ($BUILDPLATFORM).
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - run: make images
+
   stack:
     name: Local stack smoke and end-to-end test
     runs-on: ubuntu-latest

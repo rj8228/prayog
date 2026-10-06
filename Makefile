@@ -1,6 +1,6 @@
 # Prayog developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
-.PHONY: bench bench-latency help env env-upgrade users ops-token up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
+.PHONY: images bench bench-latency help env env-upgrade users ops-token up down ps logs smoke e2e reset test test-java test-python test-web replay-check fmt lint build clean install
 
 MVNW := ./mvnw -B
 # The stack reads secrets from the root .env (git-ignored). `make env` creates one.
@@ -125,3 +125,11 @@ bench-latency: ## End-to-end pipeline latency with HdrHistogram (S9), e.g. ARGS=
 	$(MVNW) -q -pl services/exchange/exchange-bench -am install -DskipTests -Dspotless.check.skip=true
 	$(BENCH) exec:exec -Dexec.executable=java \
 		-Dexec.args="--add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp %classpath dev.prayog.exchange.bench.PipelineLatency $(ARGS)"
+
+PLATFORMS ?= linux/amd64,linux/arm64
+TAG ?= $(shell git rev-parse --short HEAD)
+images: ## Build every image for amd64 and arm64 with buildx, tagged by commit (container contract #6; not pushed)
+	@for img in exchange post-trade agents web; do \
+		echo "== prayog/$$img:$(TAG) for $(PLATFORMS)"; \
+		docker buildx build --platform $(PLATFORMS) -f deploy/docker/$$img.Dockerfile -t prayog/$$img:$(TAG) . || exit 1; \
+	done
