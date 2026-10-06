@@ -128,6 +128,18 @@ class PrayogClient:
     async def me(self) -> dict[str, Any]:
         return await self._request("GET", "/api/v1/me")
 
+    # ---- after the trade (the post-trade service: official P&L and history)
+
+    async def pnl(self) -> dict[str, Any]:
+        """This account's official P&L: realised, unrealised, charges, net, leaderboard rank and
+        positions (amounts in paise). Calling it also puts this account's name on the
+        leaderboard."""
+        return await self._request("GET", "/api/v1/account/pnl")
+
+    async def fills(self, limit: int = 100) -> list[dict[str, Any]]:
+        """This account's fills from the ledger, newest first, with charges and realised P&L."""
+        return await self._request("GET", f"/api/v1/account/fills?limit={limit}")
+
     # ---- market information (public)
 
     async def instruments(self) -> list[Instrument]:

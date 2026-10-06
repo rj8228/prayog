@@ -51,6 +51,8 @@ class FakeExchange:
                     "simTime": 1,
                 },
             )
+        if request.url.path == "/api/v1/account/pnl":
+            return httpx.Response(200, json={"netPnl": -1520, "rank": 3, "positions": []})
         return httpx.Response(200, json=[])
 
 
@@ -135,3 +137,11 @@ async def test_token_provider_refreshes_30_seconds_before_expiry():
         assert await tokens.token() == "t1"
         now[0] += 2  # 271 s: inside the 30 s margin
         assert await tokens.token() == "t2"
+
+
+async def test_reads_its_own_pnl_from_post_trade_with_the_account_header(client, exchange):
+    pnl = await client.pnl()
+    assert pnl["netPnl"] == -1520 and pnl["rank"] == 3
+    sent = exchange.requests[-1]
+    assert sent.url.path == "/api/v1/account/pnl"
+    assert sent.headers["x-prayog-account"] == "mm"

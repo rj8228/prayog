@@ -95,6 +95,21 @@ async def run() -> None:
         for i in range(scenario.momentum_traders)
     ]
 
+    async def introduce() -> None:
+        """Looks each account's P&L up once, which puts its name on the leaderboard (ADR 0015).
+        Post-trade may start after the traders, so this retries for a few minutes."""
+        waiting = list(agents)
+        for _ in range(30):
+            for agent in list(waiting):
+                try:
+                    await agent.client.pnl()
+                    waiting.remove(agent)
+                except Exception as e:  # names are cosmetic: never stop trading over them
+                    log.debug("leaderboard name for %s not set yet: %s", agent.name, e)
+            if not waiting:
+                return
+            await asyncio.sleep(10)
+
     async def evolve() -> None:
         while True:
             await asyncio.sleep(scenario.step_seconds)
@@ -118,7 +133,7 @@ async def run() -> None:
                 )
 
     follower = SimulationFollower(market, fair, agents)
-    tasks = [market.run(), evolve(), report(), follower.run(maker.client, maker)]
+    tasks = [market.run(), evolve(), report(), follower.run(maker.client, maker), introduce()]
     for agent in agents:
         tasks += [agent.track(), agent.run()]
     await asyncio.gather(*tasks)

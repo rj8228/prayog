@@ -152,6 +152,17 @@ class ExchangeApiTest {
                 .isForbidden(); // ops is not a trading role
         client.get().uri("/api/v1/instruments").exchange().expectStatus().isOk(); // public
         client.get().uri("/actuator/health").exchange().expectStatus().isOk();
+        // Post-trade's paths reach the exchange only while post-trade is down: a clear 503, whoever asks.
+        client.mutateWith(ops())
+                .get()
+                .uri("/api/v1/post-trade/status")
+                .exchange()
+                .expectStatus()
+                .isEqualTo(503)
+                .expectBody()
+                .jsonPath("$.error")
+                .isEqualTo("post_trade_unavailable");
+        client.get().uri("/api/v1/leaderboard").exchange().expectStatus().isEqualTo(503);
     }
 
     @Test

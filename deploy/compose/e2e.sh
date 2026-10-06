@@ -32,9 +32,14 @@ echo "== Replay of the live journal"
   org.springframework.boot.loader.launch.PropertiesLauncher /data/journal || status=1
 "${COMPOSE[@]}" up -d --wait exchange >/dev/null 2>&1 || { echo "exchange did not come back"; status=1; }
 # The stop above took a snapshot, so the restart must have started from it (ADR 0016), not replayed everything.
+# Traefik needs a moment to route to the new container again, so retry for up to 30 s.
 T=$(make -s ops-token)
-from=$(curl -s -H "Authorization: Bearer $T" http://api.prayog.localhost/api/v1/ops/status |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["recoveredFromSnapshotInputSeq"])')
+from=""
+for _ in $(seq 30); do
+  from=$(curl -s -H "Authorization: Bearer $T" http://api.prayog.localhost/api/v1/ops/status |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["recoveredFromSnapshotInputSeq"])' 2>/dev/null) && break
+  sleep 1
+done
 if [ "${from:-0}" -gt 0 ]; then echo "restart recovered from the snapshot at input seq $from"
 else echo "FAIL: the restart did not use a snapshot"; status=1; fi
 

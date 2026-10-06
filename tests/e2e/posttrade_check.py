@@ -31,7 +31,11 @@ from kafka_check import COMPOSE, Ops, check, results, wait_for  # noqa: E402
 
 def caught_up(ops: Ops) -> bool:
     published = ops.status()["kafka"]["publishedSeq"]
-    status = ops.request("GET", "/api/v1/post-trade/status")
+    try:
+        status = ops.request("GET", "/api/v1/post-trade/status")
+    except httpx.HTTPStatusError:
+        return False  # restarting: 503 until Traefik routes to it again
+
     consumed = max(status["lastEventIdByPartition"].values(), default=0)
     return consumed >= published - 50  # a few events may still be in flight
 

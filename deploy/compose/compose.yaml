@@ -202,6 +202,8 @@ services:
     mem_limit: 768m
     # A crash restarts it; recovery rebuilds the market from the snapshot and journal (docs/failure-modes.md).
     restart: unless-stopped
+    # Time for the shutdown snapshot and journal flush before Docker kills the process (it takes ~3 s normally).
+    stop_grace_period: 30s
     healthcheck:
       # bash, not sh: the image's sh is dash, which has no /dev/tcp.
       test:
@@ -364,7 +366,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    mem_limit: 256m
+    mem_limit: 384m
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/api/health"]
       interval: 10s

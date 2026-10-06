@@ -156,6 +156,9 @@ public final class KafkaEventPublisher implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 return;
             } catch (IOException | RuntimeException e) {
+                if (!running) {
+                    return; // interrupted by close()
+                }
                 recover(e);
             }
         }
@@ -230,12 +233,16 @@ public final class KafkaEventPublisher implements AutoCloseable {
         }
     }
 
-    /** Stops after sending what is in flight (waiting up to a few seconds) and saves the checkpoint. */
+    /**
+     * Stops within a few seconds, flushing what is in flight, and saves the checkpoint. Events not acknowledged by then
+     * are resent after the restart (at least once), so a slow or absent Kafka never holds up a shutdown.
+     */
     @Override
     public void close() throws InterruptedException {
         running = false;
-        thread.join(10_000);
-        closeProducer(Duration.ofSeconds(3)); // close() flushes: in-flight sends get their acks first
+        thread.interrupt(); // wakes it from a back-off sleep or a blocked send
+        thread.join(2_000);
+        closeProducer(Duration.ofSeconds(2)); // close() flushes: in-flight sends get their acks first
         try {
             checkpoint.save();
         } catch (IOException e) {

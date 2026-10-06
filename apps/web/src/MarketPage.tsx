@@ -7,9 +7,7 @@ import { Header } from './components/Header'
 import { TickerBar } from './components/TickerBar'
 import { Toasts } from './components/Toasts'
 import { useAppDispatch, useAppSelector } from './hooks'
-import { startMarketFeed } from './market/feed'
 import { history } from './market/marketSlice'
-import { store } from './store'
 import { Workspace } from './workspace/Workspace'
 
 export function MarketPage() {
@@ -22,7 +20,6 @@ export function MarketPage() {
   const [selected, setSelected] = useState('INFY')
   const known = symbols.includes(selected)
 
-  useEffect(() => startMarketFeed(dispatch, store.getState), [dispatch])
   const refreshOrders = useAccountFeed(token)
 
   // Load more trade history for the chart when a symbol is first shown.

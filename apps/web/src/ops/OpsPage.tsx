@@ -5,6 +5,7 @@ import type { OpsStatus, PostTradeStatus } from '../api/types'
 import { withToken, signIn } from '../auth/auth'
 import { rolesOf } from '../auth/roles'
 import { useAuth } from '../auth/useAuth'
+import { useAccountFeed } from '../account/useAccountFeed'
 import { MarketControl, SimulationPanel } from '../admin/ControlPanels'
 import { usePoll } from '../admin/useAdmin'
 import { Header } from '../components/Header'
@@ -45,6 +46,8 @@ export function OpsPage() {
 }
 
 function OpsConsole() {
+  const { token } = useAuth()
+  useAccountFeed(token) // who you are, so the leaderboard can mark your row
   const status = usePoll(opsApi.status, 1000)
   const simulation = usePoll(opsApi.simulation, 3000)
   const ledger = usePoll(postTradeApi.status, 3000)

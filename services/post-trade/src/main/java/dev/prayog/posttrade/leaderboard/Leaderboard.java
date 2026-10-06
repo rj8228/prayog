@@ -96,8 +96,14 @@ public class Leaderboard {
         return n == null ? 0 : n;
     }
 
-    /** Remembers who is behind an account (once per account per process). */
-    public void name(long accountId, String username, String label) {
+    /**
+     * Remembers who is behind an account (once per account per process). Keycloak names a client's own account
+     * {@code service-account-<client>}; the board shows just the client.
+     */
+    public void name(long accountId, String rawUsername, String label) {
+        String username = rawUsername.startsWith("service-account-")
+                ? rawUsername.substring("service-account-".length())
+                : rawUsername;
         if (named.add(accountId)) {
             db.insertInto(ACCOUNT_NAMES)
                     .set(ACCOUNT_NAMES.ACCOUNT_ID, accountId)

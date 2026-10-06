@@ -235,20 +235,25 @@ public final class ExchangeRuntime implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        long start = System.nanoTime();
         housekeeping.shutdownNow();
-        if (kafka != null) {
-            kafka.close(); // first: it only reads the journal, and saves its checkpoint on the way out
-        }
-        ticker.close();
+        ticker.close(); // no more clock ticks: the snapshot below is the last state
         try {
-            takeSnapshot().get(10, TimeUnit.SECONDS); // so the next start replays almost nothing
+            // First, while everything is running: it takes milliseconds, and it is what makes the next start fast.
+            takeSnapshot().get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("no snapshot at shutdown; the next start replays from an older one", e);
         }
         pipeline.close(); // drains everything already submitted through the journal
-        snapshots.close(); // finishes writing
+        snapshots.close(); // finishes writing the snapshot
         journal.close();
-        log.info("exchange stopped at input seq {}", outbound.lastInputSeq());
+        if (kafka != null) {
+            kafka.close(); // last, and bounded: anything not acknowledged is resent from the checkpoint on restart
+        }
+        log.info(
+                "exchange stopped at input seq {} in {} ms",
+                outbound.lastInputSeq(),
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
     }
 
     // With autoNextDay: once sim time has been outside trading hours for the pause, jump to the next open.

@@ -55,6 +55,9 @@ public class SecurityConfig {
                         .permitAll()
                         .pathMatchers("/api/v1/ws/market")
                         .permitAll()
+                        // Post-trade's paths, reaching the exchange only while post-trade is down: say so (503).
+                        .pathMatchers("/api/v1/account/**", "/api/v1/leaderboard", "/api/v1/post-trade/**")
+                        .permitAll()
                         .pathMatchers("/api/v1/ops/**")
                         .hasAnyRole("ops", "admin")
                         // The ops page (S19) steers the simulated traders too: scenario, pause, news.
