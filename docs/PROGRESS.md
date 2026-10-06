@@ -46,4 +46,4 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [ ] S21 Observability (4 h)
 - [ ] S22 Docs and demo (5 h)
 - [ ] Multi-arch images
-- [ ] Phase 2 items pulled into scope (agent rate-limit tier)
+- [x] Phase 2 items pulled into scope (agent rate-limit tier) — ADR 0020

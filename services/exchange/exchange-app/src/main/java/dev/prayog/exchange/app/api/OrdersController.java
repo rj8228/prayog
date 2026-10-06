@@ -229,12 +229,11 @@ public class OrdersController {
 
     private void throttle(Trader trader) {
         directory.seen(trader);
-        boolean ok = trader.isBot()
-                ? limiter.tryAcquire(trader.accountId(), limits.botOrdersPerSecond(), limits.botBurst())
-                : limiter.tryAcquire(trader.accountId(), limits.ordersPerSecond(), limits.burst());
-        if (!ok) {
+        ExchangeProperties.RateLimit.Tier tier = limits.tierOf(trader.clientId(), trader.isBot());
+        if (!limiter.tryAcquire(trader.accountId(), tier.perSecond(), tier.burst())) {
             meters.counter("prayog.orders", "kind", "any", "outcome", "rate_limited")
                     .increment();
+            meters.counter("prayog.rate.limited", "tier", tier.name()).increment();
             throw new ApiExceptions.RateLimited();
         }
     }

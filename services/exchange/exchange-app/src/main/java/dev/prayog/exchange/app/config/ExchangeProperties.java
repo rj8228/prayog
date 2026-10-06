@@ -60,8 +60,30 @@ public record ExchangeProperties(
         }
     }
 
-    /** Token bucket per account (BUILD_PLAN 16.2 #22). Bots and simulated traders get their own, higher limit. */
-    public record RateLimit(int ordersPerSecond, int burst, int botOrdersPerSecond, int botBurst) {}
+    /**
+     * Token bucket per account (BUILD_PLAN 16.2 #22), in three tiers (ADR 0020): people ({@code trader}), bots of
+     * users ({@code bot} role), and the exchange's own simulated traders (OAuth clients in {@code agentClients}), which
+     * provide the market's liquidity and get the highest limit.
+     */
+    public record RateLimit(
+            int ordersPerSecond,
+            int burst,
+            int botOrdersPerSecond,
+            int botBurst,
+            int agentOrdersPerSecond,
+            int agentBurst,
+            List<String> agentClients) {
+
+        /** One tier's limit. */
+        public record Tier(String name, int perSecond, int burst) {}
+
+        public Tier tierOf(String clientId, boolean bot) {
+            if (agentClients != null && agentClients.contains(clientId)) {
+                return new Tier("agent", agentOrdersPerSecond, agentBurst);
+            }
+            return bot ? new Tier("bot", botOrdersPerSecond, botBurst) : new Tier("trader", ordersPerSecond, burst);
+        }
+    }
 
     /**
      * @param tradeHistory recent trades kept per symbol for snapshots and charts

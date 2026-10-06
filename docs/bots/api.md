@@ -48,6 +48,9 @@ order exists (check `GET /orders`). IDs are unique per account per trading day, 
 `WWW-Authenticate` says why), `403` (wrong role), `404 not_found` (unknown symbol, or no open order with that id for
 this account), `429 rate_limited`, `503 busy` (exchange queue full; retry).
 
+**Rate limits** (token bucket per account, [ADR 0020](../adr/0020-rate-limit-tiers.md)): people 20 orders/s (burst
+40), bots 50/s (burst 100), the exchange's own simulated traders 500/s. Over the limit: `429`; wait and retry.
+
 ## Market-data WebSocket (public)
 
 `ws://api.prayog.localhost/api/v1/ws/market?symbols=INFY,TCS&depth=20` (all symbols if `symbols` is omitted)

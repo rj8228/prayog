@@ -229,6 +229,35 @@ class ExchangeApiTest {
     }
 
     @Test
+    void ratesAreLimitedPerTierAndTheSimulatedTradersHaveTheirOwn() {
+        assertThat(sendTwenty(trader("flood2"))).as("people: burst 5").isBetween(5, 7);
+        assertThat(sendTwenty(bot("demo"))).as("users' bots: burst 8").isBetween(8, 10);
+        assertThat(sendTwenty(token("agents", "prayog-agents", "bot")))
+                .as("the exchange's simulated traders: their own, higher tier")
+                .isEqualTo(20);
+    }
+
+    private int sendTwenty(JwtMutator who) {
+        int created = 0;
+        for (int i = 0; i < 20; i++) {
+            int status = client.mutateWith(who)
+                    .post()
+                    .uri("/api/v1/orders")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(
+                            Map.of("symbol", "INFY", "side", "BUY", "type", "LIMIT", "price", 140_000, "quantity", 1))
+                    .exchange()
+                    .returnResult(String.class)
+                    .getStatus()
+                    .value();
+            if (status == 201) {
+                created++;
+            }
+        }
+        return created;
+    }
+
+    @Test
     void theMarketDataSocketSendsASnapshotThenNumberedChanges() throws Exception {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         List<JsonNode> received = new CopyOnWriteArrayList<>();
@@ -509,6 +538,10 @@ class ExchangeApiTest {
                         "--prayog.exchange.clock.start-time=10:00",
                         "--prayog.exchange.rate-limit.orders-per-second=1",
                         "--prayog.exchange.rate-limit.burst=5",
+                        "--prayog.exchange.rate-limit.bot-orders-per-second=1",
+                        "--prayog.exchange.rate-limit.bot-burst=8",
+                        "--prayog.exchange.rate-limit.agent-orders-per-second=1000",
+                        "--prayog.exchange.rate-limit.agent-burst=1000",
                         "--spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:1/unused");
     }
 

@@ -24,5 +24,6 @@ decision is tested.
 | 0017 | [Ops page and server-backed workspace panels](0017-ops-page-and-server-backed-panels.md) | 2026-10-07 |
 | 0018 | [Exchange rules as Cucumber scenarios](0018-rules-as-scenarios.md) | 2026-10-07 |
 | 0019 | [Observability: Prometheus and Grafana](0019-observability.md) | 2026-10-07 |
+| 0020 | [Rate-limit tiers: people, users' bots, simulated traders](0020-rate-limit-tiers.md) | 2026-10-07 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.

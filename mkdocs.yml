@@ -187,6 +187,7 @@ nav:
       - adr/0017-ops-page-and-server-backed-panels.md
       - adr/0018-rules-as-scenarios.md
       - adr/0019-observability.md
+      - adr/0020-rate-limit-tiers.md
   - Project:
       - Progress: PROGRESS.md
       - Build plan: BUILD_PLAN.md

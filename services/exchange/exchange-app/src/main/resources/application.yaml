@@ -37,8 +37,12 @@ prayog:
     rate-limit:
       orders-per-second: 20
       burst: 40
-      bot-orders-per-second: 500
-      bot-burst: 1000
+      # Bots of users (role bot, e.g. prayog-bot-demo) and the exchange's own simulated traders (ADR 0020).
+      bot-orders-per-second: 50
+      bot-burst: 100
+      agent-orders-per-second: 500
+      agent-burst: 1000
+      agent-clients: [prayog-agents]
     market-data:
       trade-history: 2000
       subscriber-buffer: 10000
