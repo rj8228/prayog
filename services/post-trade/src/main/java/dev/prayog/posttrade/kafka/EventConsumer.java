@@ -5,9 +5,13 @@ import dev.prayog.posttrade.leaderboard.Leaderboard;
 import dev.prayog.posttrade.ledger.Ledger;
 import dev.prayog.posttrade.ledger.LedgerQueries;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +35,8 @@ public class EventConsumer {
     private final Leaderboard leaderboard;
     private final Counter applied;
     private final Counter duplicates;
+    private final Timer batchTime;
+    private final AtomicLong lastEventId = new AtomicLong();
     private volatile boolean boardStale = true; // rebuilt once at start
 
     public EventConsumer(Ledger ledger, LedgerQueries queries, Leaderboard leaderboard, MeterRegistry meters) {
@@ -41,6 +47,13 @@ public class EventConsumer {
         this.duplicates = Counter.builder("prayog.posttrade.events.duplicate")
                 .description("redelivered events skipped (at-least-once delivery)")
                 .register(meters);
+        this.batchTime = Timer.builder("prayog.posttrade.batch")
+                .description("one Kafka batch applied to the ledger in one transaction")
+                .publishPercentiles(0.5, 0.99)
+                .register(meters);
+        Gauge.builder("prayog.posttrade.last.event", lastEventId, AtomicLong::get)
+                .description("highest exchange event id applied to the ledger")
+                .register(meters);
     }
 
     @KafkaListener(topics = "${prayog.post-trade.topic}", batch = "true")
@@ -48,7 +61,10 @@ public class EventConsumer {
         List<Ledger.Incoming> batch = records.stream()
                 .map(r -> new Ledger.Incoming(r.partition(), EventJson.fromBytes(r.value())))
                 .toList();
+        long start = System.nanoTime();
         Ledger.Changes changes = ledger.apply(batch);
+        batchTime.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        batch.forEach(in -> lastEventId.accumulateAndGet(in.event().seq(), Math::max));
         applied.increment(changes.applied());
         duplicates.increment(changes.duplicates());
         try {

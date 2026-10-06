@@ -41,6 +41,19 @@ public class AppConfig {
                 .register(meters);
         Gauge.builder("prayog.marketdata.subscribers", market, MarketHub::subscriberCount)
                 .register(meters);
+        Gauge.builder("prayog.kafka.lag", runtime, r -> r.status().kafka().lag())
+                .description("events in the journal not yet acknowledged by Kafka (ADR 0013)")
+                .register(meters);
+        Gauge.builder("prayog.kafka.connected", runtime, r -> r.status().kafka().connected() ? 1 : 0)
+                .register(meters);
+        Gauge.builder(
+                        "prayog.kafka.published.seq",
+                        runtime,
+                        r -> r.status().kafka().publishedSeq())
+                .register(meters);
+        Gauge.builder("prayog.snapshot.input.seq", runtime, r -> r.status().lastSnapshotInputSeq())
+                .description("input seq of the last snapshot written (ADR 0016)")
+                .register(meters);
         Gauge.builder("prayog.private.subscribers", accounts, AccountHub::subscriberCount)
                 .register(meters);
         return runtime;

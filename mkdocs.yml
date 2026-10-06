@@ -127,6 +127,7 @@ nav:
       - runbook/13-admin-console.md
       - runbook/14-workspace-and-strategies.md
       - runbook/15-ops-page.md
+      - runbook/16-observability.md
   - Learn:
       - learnings/README.md
       - Benchmarks: benchmarks.md
@@ -146,6 +147,7 @@ nav:
           - Engine snapshots: learnings/step-2-engine-snapshots.md
           - S9 Benchmarks: learnings/S09-benchmarks.md
           - S20 Rules as scenarios: learnings/S20-rules-as-scenarios.md
+          - S21 Observability: learnings/S21-observability.md
           - Industry context: learnings/industry-context.md
       - Interactive pages:
           - overview/index.md
@@ -184,6 +186,7 @@ nav:
       - adr/0016-engine-snapshots.md
       - adr/0017-ops-page-and-server-backed-panels.md
       - adr/0018-rules-as-scenarios.md
+      - adr/0019-observability.md
   - Project:
       - Progress: PROGRESS.md
       - Build plan: BUILD_PLAN.md

@@ -1,0 +1,17 @@
+# S21: Prometheus scrapes the services' Micrometer metrics every 5 s (profile obs).
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: exchange
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["exchange:8080"]
+  - job_name: post-trade
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["post-trade:8081"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

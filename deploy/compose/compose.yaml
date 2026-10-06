@@ -328,8 +328,54 @@ services:
       traefik.http.routers.app.entrypoints: web
       traefik.http.services.web.loadbalancer.server.port: "8080"
 
+  # ---- observability (S21, profile obs: `make up PROFILES="infra app obs"`) -----------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    profiles: [obs]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:12.4.12
+    profiles: [obs]
+    depends_on:
+      prometheus: { condition: service_healthy }
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      # Local only: anyone on this machine may view the dashboards without signing in; editing needs admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SERVER_ROOT_URL: http://grafana.prayog.localhost
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/prayog-exchange.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: Host(`grafana.prayog.localhost`)
+      traefik.http.routers.grafana.entrypoints: web
+      traefik.http.services.grafana.loadbalancer.server.port: "3000"
+
 volumes:
   exchange-journal:
   postgres-data:
   redis-data:
   kafka-data:
+  prometheus-data:
