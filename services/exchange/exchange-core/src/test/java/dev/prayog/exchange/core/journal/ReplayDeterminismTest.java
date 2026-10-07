@@ -56,6 +56,22 @@ class ReplayDeterminismTest {
         assertThat(report.matches()).isTrue();
     }
 
+    @Test
+    void archivingSegmentsDoesNotChangeTheChecksum() throws Exception {
+        record(dir, SessionWorkload.SETUP, SessionWorkload.SETUP, 2, 2_000, 64 * 1024);
+        Replay.Report before = Replay.check(dir);
+
+        JournalArchiver.Result input = JournalArchiver.archive(dir, JournalHandler.INPUT, Long.MAX_VALUE);
+        JournalArchiver.Result events = JournalArchiver.archive(dir, JournalHandler.EVENTS, Long.MAX_VALUE);
+        Replay.Report after = Replay.check(dir);
+
+        assertThat(input.segments()).as("input segments archived").isPositive();
+        assertThat(events.segments()).as("event segments archived").isPositive();
+        assertThat(after.matches()).isTrue();
+        assertThat(after.recorded()).isEqualTo(before.recorded());
+        assertThat(after.replayed()).isEqualTo(before.replayed());
+    }
+
     /**
      * Config drift: the live engine ran with wider bands than the setup it journaled. The replay produces different
      * events, and the check must say so and point at the first one.
@@ -143,8 +159,14 @@ class ReplayDeterminismTest {
      */
     private static void record(Path dir, EngineSetup journaled, EngineSetup live, int threads, int perThread)
             throws Exception {
+        record(dir, journaled, live, threads, perThread, FileJournal.DEFAULT_SEGMENT_SIZE);
+    }
+
+    private static void record(
+            Path dir, EngineSetup journaled, EngineSetup live, int threads, int perThread, long segmentSize)
+            throws Exception {
         SessionWorkload.Acks acks = new SessionWorkload.Acks();
-        try (JournalHandler journal = JournalHandler.create(dir, journaled)) {
+        try (JournalHandler journal = JournalHandler.create(dir, journaled, segmentSize)) {
             try (ExchangePipeline pipeline = ExchangePipeline.builder(
                             new PipelineConfig(4_096, WaitStrategyType.BLOCKING), live::newEngine)
                     .then(journal)

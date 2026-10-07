@@ -47,6 +47,29 @@ class SnapshotTest {
     }
 
     @Test
+    void recoveryAndTheSnapshotCheckWorkOnceOldSegmentsAreArchived() throws Exception {
+        runWithSnapshots(2, 1_500, 32 * 1024);
+        Recovery fullBefore = recover(null);
+        // Archive like the exchange: up to the oldest kept snapshot.
+        Snapshot oldest = Snapshot.decode(Files.readAllBytes(Snapshot.list(dir).getFirst()));
+        JournalArchiver.Result input = JournalArchiver.archive(dir, JournalHandler.INPUT, oldest.inputSeq());
+        JournalArchiver.Result events = JournalArchiver.archive(dir, JournalHandler.EVENTS, oldest.eventSeq());
+        assertThat(input.segments()).as("input segments archived").isPositive();
+        assertThat(events.segments()).as("event segments archived").isPositive();
+
+        Snapshot latest = Snapshot.latest(dir, Long.MAX_VALUE).orElseThrow();
+        Recovery fast = recover(latest);
+        Recovery full = recover(null); // the fallback when no snapshot is usable: reads the archive too
+
+        assertThat(fast.engine).isEqualTo(fullBefore.engine);
+        assertThat(fast.tracker).isEqualTo(fullBefore.tracker);
+        assertThat(full.engine).isEqualTo(fullBefore.engine);
+        assertThat(full.tracker).isEqualTo(fullBefore.tracker);
+        assertThat(full.recovered.replayedCommands()).isEqualTo(fullBefore.recovered.replayedCommands());
+        assertThat(Replay.checkSnapshots(dir).matches()).isTrue();
+    }
+
+    @Test
     void aSnapshotMatchesTheStateAReplayReachesAtItsSeq() throws Exception {
         runWithSnapshots(2, 1_000);
         Snapshot snapshot = Snapshot.latest(dir, Long.MAX_VALUE).orElseThrow();
@@ -127,6 +150,10 @@ class SnapshotTest {
 
     /** Runs the workload in three parts with a TakeSnapshot between them, saving snapshots like the exchange does. */
     private void runWithSnapshots(int threads, int perPart) throws Exception {
+        runWithSnapshots(threads, perPart, FileJournal.DEFAULT_SEGMENT_SIZE);
+    }
+
+    private void runWithSnapshots(int threads, int perPart, long segmentSize) throws Exception {
         SessionWorkload.Acks acks = new SessionWorkload.Acks();
         OrderTracker tracker = new OrderTracker();
         AtomicReference<Exception> failure = new AtomicReference<>();
@@ -146,7 +173,7 @@ class SnapshotTest {
                 }
             }
         };
-        try (JournalHandler journal = JournalHandler.create(dir, SessionWorkload.SETUP);
+        try (JournalHandler journal = JournalHandler.create(dir, SessionWorkload.SETUP, segmentSize);
                 ExchangePipeline pipeline = ExchangePipeline.builder(
                                 new PipelineConfig(1_024, WaitStrategyType.BLOCKING), SessionWorkload.SETUP::newEngine)
                         .then(journal)

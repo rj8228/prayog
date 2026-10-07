@@ -76,8 +76,13 @@ public final class JournalHandler implements PipelineHandler, AutoCloseable {
 
     /** Opens (or creates) both journals in {@code dir} and starts a session there. */
     public static JournalHandler create(Path dir, EngineSetup setup) throws IOException {
-        FileJournal input = FileJournal.open(dir, INPUT);
-        FileJournal events = FileJournal.open(dir, EVENTS);
+        return create(dir, setup, FileJournal.DEFAULT_SEGMENT_SIZE);
+    }
+
+    /** As {@link #create(Path, EngineSetup)}, with segments of {@code segmentSize} bytes (tests use small ones). */
+    public static JournalHandler create(Path dir, EngineSetup setup, long segmentSize) throws IOException {
+        FileJournal input = FileJournal.open(dir, INPUT, segmentSize);
+        FileJournal events = FileJournal.open(dir, EVENTS, segmentSize);
         try {
             return new JournalHandler(input, events, setup);
         } catch (IOException | RuntimeException e) {

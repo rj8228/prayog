@@ -1,9 +1,10 @@
 package dev.prayog.exchange.core.journal;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
@@ -20,6 +21,9 @@ import org.agrona.concurrent.UnsafeBuffer;
  * is real corruption and throws. With {@code upToSeq = Long.MAX_VALUE} (reading a journal nobody is writing) a bad
  * record at the very end is treated as a torn tail and the poll simply stops there, like {@link JournalReader}.
  *
+ * <p>Archived segments ({@link JournalArchiver}) are read the same way, from their gunzipped bytes; they are finished,
+ * so the tailer simply moves on at their end.
+ *
  * <p>Single thread: one tailer is used by one thread.
  */
 public final class JournalTailer implements AutoCloseable {
@@ -30,7 +34,8 @@ public final class JournalTailer implements AutoCloseable {
     private final CRC32C crc = new CRC32C();
 
     private Path segment; // the segment being read, or null before the first record exists
-    private FileChannel channel;
+    private FileChannel channel; // a live segment, or null when reading an archived one
+    private ByteBuffer archived; // an archived segment's bytes, or null when reading a live one
     private long position; // byte offset of the next record in segment
     private long lastSeq; // the last seq handed over, or fromSeq - 1
 
@@ -66,7 +71,7 @@ public final class JournalTailer implements AutoCloseable {
             if (position > before) {
                 continue; // made progress (records handed over, or skipped below fromSeq)
             }
-            if (next == null || position < channel.size()) {
+            if (next == null || position < size()) {
                 break; // the writer is still on this segment, or the next record is above upToSeq
             }
             switchTo(next, Segments.HEADER_LENGTH);
@@ -81,7 +86,7 @@ public final class JournalTailer implements AutoCloseable {
         }
         Path start = files.getFirst();
         for (Path file : files) {
-            if (firstSeq(file) <= fromSeq) {
+            if (Segments.firstSeq(file) <= fromSeq) {
                 start = file;
             }
         }
@@ -90,7 +95,7 @@ public final class JournalTailer implements AutoCloseable {
     }
 
     private int readSegment(long upToSeq, int max, RecordVisitor visitor, boolean finished) throws IOException {
-        long size = channel.size();
+        long size = size();
         if (position == Segments.HEADER_LENGTH && size >= Segments.HEADER_LENGTH) {
             checkHeader(size);
         }
@@ -100,8 +105,7 @@ public final class JournalTailer implements AutoCloseable {
         if (size - position > Integer.MAX_VALUE) {
             throw new IOException("segment larger than 2 GiB: " + segment);
         }
-        MappedByteBuffer mapped = channel.map(FileChannel.MapMode.READ_ONLY, position, size - position);
-        mapped.order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer mapped = region(position, (int) (size - position));
         UnsafeBuffer view = new UnsafeBuffer(mapped);
         int at = 0;
         int visited = 0;
@@ -137,23 +141,23 @@ public final class JournalTailer implements AutoCloseable {
         return visited;
     }
 
-    private boolean crcMatches(MappedByteBuffer mapped, int at, int length) {
+    private boolean crcMatches(ByteBuffer mapped, int at, int length) {
         crc.reset();
         crc.update(mapped.slice(at, Segments.RECORD_PREFIX + length));
         return (int) crc.getValue() == mapped.getInt(at + Segments.RECORD_PREFIX + length);
     }
 
     private void checkHeader(long size) throws IOException {
-        MappedByteBuffer header = channel.map(FileChannel.MapMode.READ_ONLY, 0, Segments.HEADER_LENGTH);
-        header.order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer header = region(0, Segments.HEADER_LENGTH);
         if (header.getInt(0) != Segments.MAGIC || header.getShort(4) != Segments.FORMAT_VERSION) {
             throw new IOException("not a journal segment (bad header): " + segment + " (" + size + " bytes)");
         }
     }
 
     private Path nextSegment(List<Path> files) {
+        long current = Segments.firstSeq(segment);
         for (Path file : files) {
-            if (file.getFileName().toString().compareTo(segment.getFileName().toString()) > 0) {
+            if (Segments.firstSeq(file) > current) {
                 return file;
             }
         }
@@ -161,17 +165,29 @@ public final class JournalTailer implements AutoCloseable {
     }
 
     private void switchTo(Path file, long at) throws IOException {
-        if (channel != null) {
-            channel.close();
-        }
+        close();
         segment = file;
-        channel = FileChannel.open(file, StandardOpenOption.READ);
         position = at;
+        if (Segments.isArchived(file)) {
+            archived = Segments.load(file);
+            return;
+        }
+        try {
+            channel = FileChannel.open(file, StandardOpenOption.READ);
+        } catch (NoSuchFileException archivedSinceListed) {
+            archived = Segments.load(file); // finds it in the archive
+        }
     }
 
-    private long firstSeq(Path file) {
-        String fileName = file.getFileName().toString();
-        return Long.parseLong(fileName.substring(name.length() + 1, fileName.length() - ".seg".length()));
+    private long size() throws IOException {
+        return archived != null ? archived.capacity() : channel.size();
+    }
+
+    private ByteBuffer region(long from, int length) throws IOException {
+        ByteBuffer bytes = archived != null
+                ? archived.slice((int) from, length)
+                : channel.map(FileChannel.MapMode.READ_ONLY, from, length);
+        return bytes.order(ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override
@@ -180,5 +196,6 @@ public final class JournalTailer implements AutoCloseable {
             channel.close();
             channel = null;
         }
+        archived = null;
     }
 }

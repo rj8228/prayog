@@ -163,7 +163,7 @@ public final class FileJournal implements Journal {
      */
     private long recover() throws IOException {
         lastSeq = -1;
-        List<Path> files = Segments.list(dir, name);
+        List<Path> files = Segments.listLive(dir, name); // archived segments are finished and verified already
         for (int i = 0; i < files.size(); i++) {
             Path file = files.get(i);
             boolean last = i == files.size() - 1;
