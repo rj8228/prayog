@@ -58,7 +58,7 @@ MVP close-out
 - [ ] Record the demo video (docs/demo.md script; raw capture in docs/media/raw) and link it from the README
 - [x] Full `make test` and `make e2e` on the repaired stack (2026-10-08)
 - [ ] Update the Step 2 handoff doc
-- [ ] Investigate new-order p99 in Grafana: 445 ms, spikes to about 3.5 s, against about 100 ns per command in the engine (fsync, Docker on macOS?); record findings in docs/benchmarks.md
+- [x] Investigate new-order p99 in Grafana: Serial GC pauses slowed about 6x (likely host memory pressure); steady-state p99 14 ms; ZGC worse in a 768 MiB container (docs/benchmarks.md, 2026-10-08)
 
 Hardening
 - [ ] UI tests: component tests per panel and Playwright journeys (Playwright needs approval) — deferred 2026-10-08

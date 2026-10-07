@@ -80,3 +80,34 @@ Reading:
 - **Memory (after the fix in ADR 0022):** `java -Xmx96m ... ArchiveSmallHeap.java <journal copy>` archives both 64 MiB
   segments (6.7 s and 5.3 s under that heap); the first version of the check threw `OutOfMemoryError` with the same
   heap.
+
+## 2026-10-08 · Order latency tail in the Docker stack (Grafana p99 of 445 ms, spikes to 3.5 s)
+
+Question: Grafana showed new-order p99 at 445 ms with spikes to about 3.5 s on 2026-10-07 (03:05-03:18 IST), against
+12 ms median for the order path on the host (above). Where does the tail come from?
+
+Machine: as above; Docker Desktop with 3.8 GiB for the whole stack (11 containers); the exchange container has
+768 MiB and `-XX:MaxRAMPercentage=75`. Load: the simulated traders, calm scenario, clock at 1x (about 1.7-1.8 new
+orders a second). Numbers from Prometheus (`prayog_order_latency_seconds`, gateway to journaled answer;
+`jvm_gc_pause_seconds`), queried by `docs/_tools/gc_latency_window.py <end time> <window>` (histogram_quantile over the window).
+
+| Window | Collector | p50 | p90 | p99 | p99.9 | Longest GC pause | GC pause time in window |
+|---|---|---|---|---|---|---|---|
+| 2026-10-06 21:36-21:44 UTC (the screenshot) | Serial | - | - | 410 ms - 1.41 s | 524 ms - 3.47 s | 5.93 s full, 1.07 s minor | 6.3 s of minor pauses in 4 min (about 94 ms each) |
+| 2026-10-07 19:50-20:00 UTC | Serial | 2.8 ms | 5.5 ms | 14 ms | 25 ms | 44 ms | 2.7 s (about 15 ms each) |
+| 2026-10-07 20:01-20:11 UTC | Generational ZGC (`-XX:+UseZGC -XX:+ZGenerational`) | 2.9 ms | 7.0 ms | 78 ms | 156 ms | 10 ms | 14 ms |
+
+Also measured: fsync in the journal volume inside the container, `dd bs=4k count=200 oflag=dsync`: 0.8 ms each.
+
+Reading:
+- **The JVM picks the Serial collector in this container** (less than 1792 MB of memory), whose pauses stop every
+  thread, including the matching thread and the journal.
+- **The screenshot's tail was GC pauses, about 6x slower than normal.** Collections were as frequent as in the clean
+  window but each took about 94 ms instead of 15 ms, and one full collection took 5.9 s. Same work, slower pauses: most
+  likely the host was short of memory (8 GB Mac, browser recording the demo, 11 containers). Not proven: there is no
+  host memory metric in Prometheus.
+- **In steady state the tail is fine:** p99 14 ms, p99.9 25 ms, close to the host's fsync-bound path.
+- **ZGC made it worse here.** Its pauses are tiny, but it used the whole 512 MiB heap, the container ran at
+  758/768 MiB, and allocation stalls (not counted as pauses) raised p99 5x. A concurrent collector needs headroom.
+- **Decision:** keep the default collector. If the tail matters again: give Docker more memory first, then compare G1
+  and ZGC with a larger container (for example 1.5 GiB), measured the same way.
