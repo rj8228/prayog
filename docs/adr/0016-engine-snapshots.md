@@ -60,5 +60,5 @@ trade on a different book (the failure ADR 0014 already guards against).
 - Snapshots copy the engine on the matching thread. The cost is proportional to resting orders (thousands here,
   well under a millisecond) and paid once every 5 minutes.
 - Market-data sequence numbers continue from the snapshot, as clients expect after a reconnect.
-- The journal is not yet truncated behind snapshots. Segment archiving can now delete segments older than the oldest
-  kept snapshot (M4 or later).
+- The journal is not truncated behind snapshots. Since ADR 0022, segments older than the oldest kept snapshot are
+  archived (gzipped, still readable); deleting them is a later decision.

@@ -192,6 +192,7 @@ nav:
       - adr/0019-observability.md
       - adr/0020-rate-limit-tiers.md
       - adr/0021-multi-arch-images.md
+      - adr/0022-journal-archiving.md
   - Project:
       - Progress: PROGRESS.md
       - Build plan: BUILD_PLAN.md
