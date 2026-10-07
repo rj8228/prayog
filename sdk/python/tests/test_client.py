@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import httpx
@@ -145,3 +146,13 @@ async def test_reads_its_own_pnl_from_post_trade_with_the_account_header(client,
     sent = exchange.requests[-1]
     assert sent.url.path == "/api/v1/account/pnl"
     assert sent.headers["x-prayog-account"] == "mm"
+
+
+async def test_post_trade_calls_can_go_to_their_own_address(exchange):
+    http = httpx.AsyncClient(transport=httpx.MockTransport(exchange))
+    settings = dataclasses.replace(SETTINGS, post_trade_url="http://post-trade:8081")
+    async with PrayogClient(settings, http=http) as c:
+        await c.pnl()
+        assert str(exchange.requests[-1].url) == "http://post-trade:8081/api/v1/account/pnl"
+        await c.open_orders()
+        assert str(exchange.requests[-1].url).startswith(SETTINGS.api_url)

@@ -134,11 +134,13 @@ class PrayogClient:
         """This account's official P&L: realised, unrealised, charges, net, leaderboard rank and
         positions (amounts in paise). Calling it also puts this account's name on the
         leaderboard."""
-        return await self._request("GET", "/api/v1/account/pnl")
+        return await self._request("GET", "/api/v1/account/pnl", base=self._post_trade)
 
     async def fills(self, limit: int = 100) -> list[dict[str, Any]]:
         """This account's fills from the ledger, newest first, with charges and realised P&L."""
-        return await self._request("GET", f"/api/v1/account/fills?limit={limit}")
+        return await self._request(
+            "GET", f"/api/v1/account/fills?limit={limit}", base=self._post_trade
+        )
 
     # ---- market information (public)
 
@@ -175,8 +177,14 @@ class PrayogClient:
             "X-Prayog-Account": self.settings.account,
         }
 
-    async def _request(self, method: str, path: str, *, auth: bool = True, json: Any = None) -> Any:
-        url = self.settings.api_url + path
+    @property
+    def _post_trade(self) -> str:
+        return self.settings.post_trade_url or self.settings.api_url
+
+    async def _request(
+        self, method: str, path: str, *, auth: bool = True, json: Any = None, base: str = ""
+    ) -> Any:
+        url = (base or self.settings.api_url) + path
         for attempt in range(2):
             headers = await self.auth_headers() if auth else {}
             response = await self._http.request(method, url, headers=headers, json=json)

@@ -239,7 +239,7 @@ function AfterTheTrade({
           <b>
             {status?.lastSnapshotInputSeq
               ? `seq ${status.lastSnapshotInputSeq.toLocaleString('en-IN')}`
-              : 'none yet'}
+              : 'none since this start'}
           </b>
         </div>
         <div className="stat">

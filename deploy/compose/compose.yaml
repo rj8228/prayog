@@ -304,6 +304,7 @@ services:
       exchange: { condition: service_healthy }
     environment:
       PRAYOG_API_URL: http://exchange:8080
+      PRAYOG_POST_TRADE_URL: http://post-trade:8081
       # Tokens from inside the network; they still carry the public issuer (KC_HOSTNAME).
       PRAYOG_AUTH_URL: http://keycloak:8080/realms/prayog
       PRAYOG_CLIENT_ID: prayog-agents

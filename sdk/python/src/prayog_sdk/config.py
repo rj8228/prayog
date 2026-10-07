@@ -21,6 +21,10 @@ class Settings:
     client_secret: str = ""
     account: str = "main"
     timeout_seconds: float = 10.0
+    # Where the post-trade service answers (P&L, fills). Empty: the same address as the exchange
+    # API, which is right whenever the reverse proxy (Traefik) is in front; services inside the
+    # Docker network that call the exchange directly set it to http://post-trade:8081.
+    post_trade_url: str = ""
 
     @staticmethod
     def from_env(**overrides: str) -> "Settings":
@@ -37,6 +41,7 @@ class Settings:
                 "PRAYOG_CLIENT_SECRET", os.environ.get("PRAYOG_BOT_DEMO_SECRET", "")
             ),
             "account": os.environ.get("PRAYOG_ACCOUNT", Settings.account),
+            "post_trade_url": os.environ.get("PRAYOG_POST_TRADE_URL", ""),
         }
         values.update(overrides)
         return Settings(**values)
