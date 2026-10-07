@@ -49,3 +49,31 @@ Reading:
 - **Next steps if latency mattered:** a server with a fast fsync (enterprise NVMe with power-loss protection, or a
   replicated journal instead of fsync, as LMAX does); ZGC or an allocation-free hot path; pinned cores. None are
   needed for a simulated market at tens of commands a second.
+
+## 2026-10-08 · Journal archiving (ADR 0022)
+
+Machine: Apple M1, 8 GB, macOS 26 (Darwin 25.5), Java 21.0.6, SSD. Data: a copy of the live journal volume
+(`prayog_exchange-journal`, about 3 days of sessions), one closed 64 MiB segment per journal. Each full read was run 3
+times; the first live read is cold (pages not yet cached).
+
+```
+java --add-exports java.base/jdk.internal.misc=ALL-UNNAMED \
+  -cp "services/exchange/exchange-core/target/classes:<exchange-core classpath>" ArchiveBench.java <journal copy>
+```
+
+(`ArchiveBench` copies a journal's segments to a temp dir, times `JournalReader.read` over everything, runs
+`JournalArchiver.archive(dir, name, Long.MAX_VALUE)`, then times the full read again.)
+
+| Journal | Records | Segment | Archived | Ratio | Archive time | Full read live | Full read after |
+|---|---|---|---|---|---|---|---|
+| input | 1,319,912 | 64.0 MiB | 24.3 MiB | 2.6x | 3.3 s | 1,524 / 56 / 32 ms | 490 / 305 / 284 ms |
+| events | 1,002,939 | 64.0 MiB | 13.3 MiB | 4.8x | 2.5 s | 33 / 31 / 31 ms | 214 / 189 / 172 ms |
+
+Reading:
+- **Disk use falls by 2.6-4.8x** for archived history. The input journal compresses less because order commands
+  carry more varied fields; events repeat structure (fills, acks).
+- **Archiving costs about 3 s per 64 MiB segment** (gzip, then a byte-for-byte check). It runs on the snapshot thread,
+  never on the order path, at most once per finished segment.
+- **Reading archived history is 6-9x slower** (gunzip, about 0.2-0.3 s per segment, warm). Only full replays (the
+  replay check, admin views, recovery when no snapshot is usable) read it; restart from a snapshot and the Kafka
+  publisher read live segments only, which is why the safe point is the oldest kept snapshot and the Kafka checkpoint.
