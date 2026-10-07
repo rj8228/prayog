@@ -42,7 +42,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 ## M4 Hardening layers
 - [x] S9 Benchmarks (4 h) — docs/benchmarks.md
-- [ ] S14 Realism checks (4 h) — statistics and live collector built and tested (b9914aa); remaining: run `tests/e2e/realism_report.py` for calm and volatile, save docs/realism.md, learnings file
+- [x] S14 Realism checks (4 h) — docs/realism.md 2026-10-08; spread and return autocorrelation realistic, fat tails weak, volatility clustering not reproduced (docs/learnings/S14-realism.md)
 - [x] S20 Exchange rules as Cucumber scenarios (5 h) — ADR 0018
 - [x] S21 Observability (4 h) — ADR 0019; Grafana showed a live session and Kafka lag spikes 2026-10-07 (docs/media/05-grafana.png)
 - [x] S22 Docs and demo (5 h) — README, failure-modes.md, demo.md (recording: follow docs/demo.md)
@@ -52,7 +52,8 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 ## Backlog (from the handoff, focus plan and ideas docs, 2026-10-07)
 
 MVP close-out
-- [ ] S14 report: run the realism report on the live stack, commit docs/realism.md and docs/learnings/S14
+- [x] S14 report: run the realism report on the live stack, commit docs/realism.md and docs/learnings/S14
+- [ ] Volatility clustering in the simulator (time-varying sigma or self-exciting jumps), then a longer realism run
 - [x] Learnings for S18 and S19 (ops page, blotter, server P&L), linked from docs/learnings/README.md
 - [ ] Record the demo video (docs/demo.md script; raw capture in docs/media/raw) and link it from the README
 - [x] Full `make test` and `make e2e` on the repaired stack (2026-10-08)

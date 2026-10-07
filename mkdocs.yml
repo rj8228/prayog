@@ -131,6 +131,7 @@ nav:
   - Learn:
       - learnings/README.md
       - Benchmarks: benchmarks.md
+      - Realism report: realism.md
       - Failure modes: failure-modes.md
       - Demo script: demo.md
       - Sessions:
@@ -143,6 +144,7 @@ nav:
           - S2 Local infrastructure: learnings/S02-local-infrastructure.md
           - S10–S13 Live market: learnings/S10-S13-live-market.md
           - Step 1.5 Admin, workspace, strategies: learnings/step-1.5-admin-workspace-strategies.md
+          - S14 Realism checks: learnings/S14-realism.md
           - S15 Kafka publisher: learnings/S15-kafka-publisher.md
           - Duplicate client order IDs: learnings/step-2-duplicate-client-order-ids.md
           - S16–S17 Post-trade and leaderboard: learnings/S16-S17-post-trade-and-leaderboard.md

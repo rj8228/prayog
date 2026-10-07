@@ -41,6 +41,7 @@ Interactive explainers in [`docs/overview/`](../overview/index.md), each with a 
 | S8 Journal and replay | [S08-journal-and-replay.md](S08-journal-and-replay.md) | Write-ahead journal, fsync and group commit, torn writes and CRC, SBE, deterministic replay checksums |
 | S10–S13 Live market | [S10-S13-live-market.md](S10-S13-live-market.md) | Gateway, recovery, derived market data, feeds and gaps, account ids, market making, reconciliation, e2e correctness |
 | Step 1.5 Admin, workspace, strategies | [step-1.5-admin-workspace-strategies.md](step-1.5-admin-workspace-strategies.md) | Admin role and self-test, online replay, live simulation control, grid layouts, average-cost P&L, pure strategies, pre-trade risk |
+| S14 Realism checks | [S14-realism.md](S14-realism.md) | Stylised facts, kurtosis, volatility clustering, sampling error, measuring from the feed |
 | S15 Kafka publisher | [S15-kafka-publisher.md](S15-kafka-publisher.md) | Topics, partitions and offsets, delivery guarantees, idempotent producers, contiguous acked checkpoint, journal as outbox, chaos tests |
 | Duplicate client order IDs | [step-2-duplicate-client-order-ids.md](step-2-duplicate-client-order-ids.md) | Idempotency keys, retries after timeouts, bounded state, rule changes vs replay, test oracles |
 | S16–S17 Post-trade and leaderboard | [S16-S17-post-trade-and-leaderboard.md](S16-S17-post-trade-and-leaderboard.md) | Idempotent consumers, exactly-once effects, average cost in integers, zero-sum reconciliation, sorted sets, rebuildable views |
