@@ -14,6 +14,7 @@ import dev.prayog.exchange.core.SetRules;
 import dev.prayog.exchange.core.TakeSnapshot;
 import dev.prayog.exchange.core.journal.EngineSetup;
 import dev.prayog.exchange.core.journal.FileJournal;
+import dev.prayog.exchange.core.journal.JournalArchiver;
 import dev.prayog.exchange.core.journal.JournalHandler;
 import dev.prayog.exchange.core.journal.JournalRecovery;
 import dev.prayog.exchange.core.journal.Snapshot;
@@ -105,7 +106,7 @@ public final class ExchangeRuntime implements AutoCloseable {
         }
         recoveredFromSnapshot = recoveredFrom;
         snapshots =
-                new SnapshotWriter(props.journalDir(), snapshotSettings(props).keep());
+                new SnapshotWriter(props.journalDir(), snapshotSettings(props).keep(), this::publishedEventSeq);
         outbound = new OutboundHandler(market, accounts, snapshots, startedAfterSeq, events.lastSeq());
         pipeline = ExchangePipeline.builder(props.pipeline().toConfig(), engineFactory)
                 .continueAfter(startedAfterSeq)
@@ -180,6 +181,17 @@ public final class ExchangeRuntime implements AutoCloseable {
         return done;
     }
 
+    /** Archives old journal segments now (ADR 0022); normally this follows every snapshot. */
+    public CompletableFuture<SnapshotWriter.ArchiveReport> archiveJournal() {
+        return snapshots.archive();
+    }
+
+    // The event log's Kafka reader is done up to its checkpoint; with no publisher nothing else holds it back.
+    private long publishedEventSeq() {
+        KafkaEventPublisher publisher = kafka;
+        return publisher != null ? publisher.status().publishedSeq() : Long.MAX_VALUE;
+    }
+
     /** Sim time now, epoch microseconds. */
     public long simTime() {
         return clock.now();
@@ -203,6 +215,7 @@ public final class ExchangeRuntime implements AutoCloseable {
     }
 
     public Status status() {
+        JournalArchiver.Usage usage = snapshots.usage();
         return new Status(
                 recovered,
                 startedAfterSeq,
@@ -215,7 +228,9 @@ public final class ExchangeRuntime implements AutoCloseable {
                 market.session(),
                 kafka != null ? kafka.status() : new KafkaEventPublisher.Status(false, false, 0, 0, 0),
                 recoveredFromSnapshot,
-                snapshots.lastInputSeq());
+                snapshots.lastInputSeq(),
+                usage.liveBytes(),
+                usage.archivedBytes());
     }
 
     /** Operational state for the ops page and debugging. */
@@ -231,7 +246,9 @@ public final class ExchangeRuntime implements AutoCloseable {
             SessionState session,
             KafkaEventPublisher.Status kafka,
             long recoveredFromSnapshotInputSeq,
-            long lastSnapshotInputSeq) {}
+            long lastSnapshotInputSeq,
+            long journalLiveBytes,
+            long journalArchivedBytes) {}
 
     @Override
     public void close() throws Exception {

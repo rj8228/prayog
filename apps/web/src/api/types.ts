@@ -177,6 +177,8 @@ export interface OpsStatus {
   }
   recoveredFromSnapshotInputSeq?: number
   lastSnapshotInputSeq?: number
+  journalLiveBytes?: number
+  journalArchivedBytes?: number
 }
 
 export interface Overview {

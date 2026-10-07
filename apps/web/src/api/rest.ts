@@ -218,4 +218,10 @@ export const opsApi = {
   simulation: (token: string) => call<Simulation>('/simulation', {}, token),
   snapshot: (token: string) =>
     call<{ inputSeq: number }>('/ops/snapshot', post(), token),
+  archive: (token: string) =>
+    call<{ segments: number; originalBytes: number; archivedBytes: number }>(
+      '/ops/archive',
+      post(),
+      token,
+    ),
 }

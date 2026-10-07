@@ -243,6 +243,14 @@ function AfterTheTrade({
           </b>
         </div>
         <div className="stat">
+          <span className="muted">Journal on disk (live / archived)</span>
+          <b>
+            {status?.journalLiveBytes !== undefined
+              ? `${mib(status.journalLiveBytes)} / ${mib(status.journalArchivedBytes ?? 0)}`
+              : '-'}
+          </b>
+        </div>
+        <div className="stat">
           <span className="muted">Started from snapshot</span>
           <b>
             {status?.recoveredFromSnapshotInputSeq
@@ -264,8 +272,30 @@ function AfterTheTrade({
         >
           Take a snapshot now
         </button>
+        <button
+          onClick={() =>
+            void withToken(opsApi.archive)
+              .then((r) =>
+                setSnapshot(
+                  r.segments > 0
+                    ? `Archived ${r.segments} segments: ${mib(r.originalBytes)} to ${mib(r.archivedBytes)}`
+                    : 'Nothing to archive yet: no finished segment is older than the oldest snapshot',
+                ),
+              )
+              .catch((e: Error) =>
+                setSnapshot(`Archiving failed: ${e.message}`),
+              )
+          }
+        >
+          Archive old journal
+        </button>
       </div>
       {snapshot && <p className="result ok">{snapshot}</p>}
     </section>
   )
+}
+
+// Journal sizes for the ops page: one decimal, in MiB.
+function mib(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
 }

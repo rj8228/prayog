@@ -374,6 +374,25 @@ class ExchangeApiTest {
         awaitUntil(() ->
                 get(ops(), "/api/v1/ops/status").get("lastSnapshotInputSeq").asLong()
                         == taken.get("inputSeq").asLong());
+
+        // Archiving (ADR 0022) runs up to the oldest kept snapshot. Segments here are far below 64 MiB, so the only
+        // segment of each journal is still being written and nothing moves; the core tests cover the moving.
+        JsonNode archived = client.mutateWith(ops())
+                .post()
+                .uri("/api/v1/ops/archive")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(archived.get("inputUpToSeq").asLong())
+                .as("oldest kept snapshot")
+                .isPositive();
+        assertThat(archived.get("segments").asInt()).isZero();
+        JsonNode disk = get(ops(), "/api/v1/ops/status");
+        assertThat(disk.get("journalLiveBytes").asLong()).isPositive();
+        assertThat(disk.get("journalArchivedBytes").asLong()).isZero();
     }
 
     private JsonNode ticker(String symbol) {

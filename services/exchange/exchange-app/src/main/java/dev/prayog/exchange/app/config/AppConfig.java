@@ -54,6 +54,14 @@ public class AppConfig {
         Gauge.builder("prayog.snapshot.input.seq", runtime, r -> r.status().lastSnapshotInputSeq())
                 .description("input seq of the last snapshot written (ADR 0016)")
                 .register(meters);
+        Gauge.builder("prayog.journal.live.bytes", runtime, r -> r.status().journalLiveBytes())
+                .description("bytes of live journal segments, both journals (ADR 0022)")
+                .baseUnit("bytes")
+                .register(meters);
+        Gauge.builder("prayog.journal.archived.bytes", runtime, r -> r.status().journalArchivedBytes())
+                .description("bytes of gzipped archived journal segments, both journals (ADR 0022)")
+                .baseUnit("bytes")
+                .register(meters);
         Gauge.builder("prayog.private.subscribers", accounts, AccountHub::subscriberCount)
                 .register(meters);
         return runtime;

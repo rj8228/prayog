@@ -5,6 +5,7 @@ import dev.prayog.exchange.app.api.ApiTypes.SetAccount;
 import dev.prayog.exchange.app.api.ApiTypes.SetClock;
 import dev.prayog.exchange.app.api.ApiTypes.SetSession;
 import dev.prayog.exchange.app.core.ExchangeRuntime;
+import dev.prayog.exchange.app.snapshot.SnapshotWriter;
 import dev.prayog.exchange.core.SetAccountEnabled;
 import dev.prayog.exchange.core.SetSessionState;
 import java.util.Map;
@@ -86,6 +87,12 @@ public class OpsController {
         return Mono.fromFuture(exchange.takeSnapshot())
                 .publishOn(Schedulers.parallel())
                 .map(r -> Map.of("inputSeq", r.inputSeq()));
+    }
+
+    /** Archives old journal segments now (ADR 0022); it also happens after every snapshot. */
+    @PostMapping("/archive")
+    Mono<SnapshotWriter.ArchiveReport> archive() {
+        return Mono.fromFuture(exchange.archiveJournal()).publishOn(Schedulers.parallel());
     }
 
     /** Jumps to the next scheduled open: today's orders expire at the close, then the new day opens. */
