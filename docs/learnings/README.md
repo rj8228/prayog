@@ -48,6 +48,8 @@ Interactive explainers in [`docs/overview/`](../overview/index.md), each with a 
 | S9 Benchmarks | [S09-benchmarks.md](S09-benchmarks.md) | JMH, steady state, percentiles, coordinated omission, group commit, GC tails |
 | S20 Rules as scenarios | [S20-rules-as-scenarios.md](S20-rules-as-scenarios.md) | BDD, Gherkin, step definitions, scenario outlines, executable specifications |
 | S21 Observability | [S21-observability.md](S21-observability.md) | Golden signals, counters vs gauges vs histograms, lag, dashboards as code |
+| S18–S19 Terminal, blotter, ops page | [S18-S19-terminal-blotter-ops.md](S18-S19-terminal-blotter-ops.md) | Official vs estimated P&L, polling vs push, role design, compressed sim time |
+| Journal archiving | [step-2-journal-archiving.md](step-2-journal-archiving.md) | Segmented logs, retention vs archiving, safe points, crash-safe file replacement, memory in background jobs |
 | S22 Docs and demo | [S22-docs-and-demo.md](S22-docs-and-demo.md) | Failure-mode tables as test indexes, diagrams as code, demo storytelling |
 | Industry context | [industry-context.md](industry-context.md) | Exchange vs trading firm, HFT components, what production engines do differently |
 

@@ -151,6 +151,8 @@ nav:
           - S20 Rules as scenarios: learnings/S20-rules-as-scenarios.md
           - S21 Observability: learnings/S21-observability.md
           - S22 Docs and demo: learnings/S22-docs-and-demo.md
+          - S18–S19 Terminal, blotter, ops page: learnings/S18-S19-terminal-blotter-ops.md
+          - Journal archiving: learnings/step-2-journal-archiving.md
           - Industry context: learnings/industry-context.md
       - Interactive pages:
           - overview/index.md

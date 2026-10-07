@@ -38,6 +38,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 ## Step 2 additions (2026-10-07)
 - [x] Duplicate client order IDs rejected per account per trading day — ADR 0014
 - [x] Engine snapshots (recovery replays from the latest snapshot) — ADR 0016
+- [x] Journal archiving (gzip finished segments, readers see one history) — ADR 0022, 2026-10-08
 
 ## M4 Hardening layers
 - [x] S9 Benchmarks (4 h) — docs/benchmarks.md
@@ -52,21 +53,22 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 MVP close-out
 - [ ] S14 report: run the realism report on the live stack, commit docs/realism.md and docs/learnings/S14
-- [ ] Learnings for S18 and S19 (ops page, blotter, server P&L), linked from docs/learnings/README.md
+- [x] Learnings for S18 and S19 (ops page, blotter, server P&L), linked from docs/learnings/README.md
 - [ ] Record the demo video (docs/demo.md script; raw capture in docs/media/raw) and link it from the README
-- [ ] Full `make test` and `make e2e` on the repaired stack; update the Step 2 handoff doc
+- [x] Full `make test` and `make e2e` on the repaired stack (2026-10-08)
+- [ ] Update the Step 2 handoff doc
 - [ ] Investigate new-order p99 in Grafana: 445 ms, spikes to about 3.5 s, against about 100 ns per command in the engine (fsync, Docker on macOS?); record findings in docs/benchmarks.md
 
 Hardening
-- [ ] UI tests: component tests per panel and Playwright journeys (Playwright needs approval)
-- [ ] Journal segment archiving (10 clock ticks a second; segments grow forever)
+- [ ] UI tests: component tests per panel and Playwright journeys (Playwright needs approval) — deferred 2026-10-08
+- [x] Journal segment archiving — ADR 0022
 - [ ] Leaderboard: confirm simulated traders now show names (the 2026-10-07 screenshot shows hashed ids)
 
 Showcase (focus plan definition of done)
 - [ ] Host it so a stranger can use it, with a 2-minute demo video (hosting not decided)
 - [ ] JMH baseline, then GC tuning and lock-free changes, each with before and after numbers
 - [ ] Written design for 1 million users (shard by market, hot standby replaying the journal, market data fan-out with conflation and backpressure)
-- [ ] JEV-model bot (expected value, Kelly sizing) benchmarked against the traditional bots
+- [ ] JEV-model bot (TypeSafe AI's Jev decision API) against a random baseline — skipped 2026-10-08, needs an API key
 - [ ] Releases R0 to R3 tagged, ending with bot arena v1 (offline submissions, shared with Galois)
 - [ ] Interview companion entries for Prayog: pitch, numbers, failures, decisions
 
