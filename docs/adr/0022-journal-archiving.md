@@ -43,6 +43,15 @@ Option 2.
    (`POST /api/v1/ops/archive`). Disk use is in the ops status, on the ops page and in Prometheus
    (`prayog_journal_live_bytes`, `prayog_journal_archived_bytes`).
 
+## Incident found by `make e2e` (fixed)
+
+The first live run starved the exchange: the byte-for-byte check held the original and the gunzipped copy (2 x 64 MiB
+plus `readAllBytes` growth) in a 576 MiB heap that was already busy, the JVM stopped answering scrapes, the shutdown
+snapshot queued behind it and Docker killed the container. Fixes: the check streams both files in 64 KiB chunks;
+reading an archived segment allocates exactly its size (from the gzip trailer); archiving is skipped once shutdown
+starts. With a 96 MiB heap the old code throws `OutOfMemoryError` on the live journal's segments and the new code
+archives both (docs/benchmarks.md).
+
 ## Testing
 
 - `JournalArchiverTest` (12): only finished segments at or below the safe seq; never the active one; readers and the

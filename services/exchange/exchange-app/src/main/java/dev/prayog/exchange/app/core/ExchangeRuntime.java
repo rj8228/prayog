@@ -254,6 +254,7 @@ public final class ExchangeRuntime implements AutoCloseable {
     public void close() throws Exception {
         long start = System.nanoTime();
         housekeeping.shutdownNow();
+        snapshots.stopArchiving(); // the shutdown snapshot must not queue behind a 64 MiB gzip
         ticker.close(); // no more clock ticks: the snapshot below is the last state
         try {
             // First, while everything is running: it takes milliseconds, and it is what makes the next start fast.

@@ -44,6 +44,7 @@ public final class SnapshotWriter implements AutoCloseable {
     private final AtomicLong lastInputSeq = new AtomicLong();
     private final AtomicLong errors = new AtomicLong();
     private final LongSupplier publishedEventSeq;
+    private volatile boolean closing;
 
     /**
      * @param publishedEventSeq the highest event seq a reader of the event log is done with (the Kafka publisher's
@@ -82,6 +83,9 @@ public final class SnapshotWriter implements AutoCloseable {
                 errors.incrementAndGet();
                 log.warn("snapshot at input seq {} could not be written; recovery will use an older one", inputSeq, e);
                 return;
+            }
+            if (closing) {
+                return; // shutdown waits for this thread: the snapshot matters, archiving can wait for the next start
             }
             try {
                 archiveOnThisThread();
@@ -159,9 +163,15 @@ public final class SnapshotWriter implements AutoCloseable {
         return errors.get();
     }
 
+    /** From now on snapshots are written but nothing is archived: called first thing at shutdown. */
+    public void stopArchiving() {
+        closing = true;
+    }
+
     /** Finishes the snapshots already queued. */
     @Override
     public void close() throws InterruptedException {
+        closing = true;
         thread.shutdown();
         if (!thread.awaitTermination(30, TimeUnit.SECONDS)) {
             log.warn("snapshot writer still busy after 30 s; stopping it");

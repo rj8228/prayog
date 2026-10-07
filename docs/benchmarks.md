@@ -77,3 +77,6 @@ Reading:
 - **Reading archived history is 6-9x slower** (gunzip, about 0.2-0.3 s per segment, warm). Only full replays (the
   replay check, admin views, recovery when no snapshot is usable) read it; restart from a snapshot and the Kafka
   publisher read live segments only, which is why the safe point is the oldest kept snapshot and the Kafka checkpoint.
+- **Memory (after the fix in ADR 0022):** `java -Xmx96m ... ArchiveSmallHeap.java <journal copy>` archives both 64 MiB
+  segments (6.7 s and 5.3 s under that heap); the first version of the check threw `OutOfMemoryError` with the same
+  heap.

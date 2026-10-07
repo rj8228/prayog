@@ -34,6 +34,7 @@ import java.util.zip.GZIPOutputStream;
 public final class JournalArchiver {
 
     private static final String TEMP_SUFFIX = ".tmp";
+    private static final int CHUNK = 64 * 1024;
 
     private JournalArchiver() {}
 
@@ -105,7 +106,7 @@ public final class JournalArchiver {
     /** Gzips {@code source} into {@code target} and fsyncs it. */
     static void compress(Path source, Path target) throws IOException {
         try (InputStream in = Files.newInputStream(source);
-                OutputStream out = new GZIPOutputStream(Files.newOutputStream(target), 64 * 1024)) {
+                OutputStream out = new GZIPOutputStream(Files.newOutputStream(target), CHUNK)) {
             in.transferTo(out);
         }
         try (FileChannel channel = FileChannel.open(target, StandardOpenOption.WRITE)) {
@@ -113,15 +114,23 @@ public final class JournalArchiver {
         }
     }
 
-    // Byte for byte: stronger than re-checking record CRCs, and segments are small enough to hold twice.
+    // Byte for byte, streamed in small chunks: stronger than re-checking record CRCs, and constant memory. (Holding
+    // both 64 MiB copies at once starved the exchange's heap in a 768 MiB container; see ADR 0022.)
     private static void verify(Path original, Path archived) throws IOException {
-        byte[] expected = Files.readAllBytes(original);
-        byte[] actual;
-        try (InputStream in = new GZIPInputStream(Files.newInputStream(archived))) {
-            actual = in.readAllBytes();
-        }
-        if (!Arrays.equals(expected, actual)) {
-            throw new IOException("archived copy differs from the original segment: " + archived);
+        byte[] expected = new byte[CHUNK];
+        byte[] actual = new byte[CHUNK];
+        try (InputStream a = Files.newInputStream(original);
+                InputStream b = new GZIPInputStream(Files.newInputStream(archived), CHUNK)) {
+            while (true) {
+                int n = a.readNBytes(expected, 0, CHUNK);
+                int m = b.readNBytes(actual, 0, CHUNK);
+                if (n != m || !Arrays.equals(expected, 0, n, actual, 0, m)) {
+                    throw new IOException("archived copy differs from the original segment: " + archived);
+                }
+                if (n < CHUNK) {
+                    return;
+                }
+            }
         }
     }
 

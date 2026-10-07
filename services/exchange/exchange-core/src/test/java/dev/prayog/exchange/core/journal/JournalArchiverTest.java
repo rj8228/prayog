@@ -35,6 +35,25 @@ class JournalArchiverTest {
     }
 
     @Test
+    void segmentsLargerThanTheCompareChunkArchiveAndReadBack() throws IOException {
+        java.util.Random random = new java.util.Random(7);
+        List<String> written = new ArrayList<>();
+        try (FileJournal journal = FileJournal.open(dir, NAME, 512 * 1024)) {
+            for (int seq = 1; seq <= 3_000; seq++) {
+                String text = Long.toHexString(random.nextLong()).repeat(1 + random.nextInt(20));
+                append(journal, seq, text);
+                written.add(seq + ":" + text);
+            }
+        }
+        assertThat(Segments.listLive(dir, NAME)).hasSizeGreaterThanOrEqualTo(2);
+
+        JournalArchiver.Result result = JournalArchiver.archive(dir, NAME, Long.MAX_VALUE);
+
+        assertThat(result.originalBytes()).isGreaterThan(256 * 1024);
+        assertThat(readAll()).isEqualTo(written);
+    }
+
+    @Test
     void neverArchivesTheSegmentBeingWritten() throws IOException {
         write(1, 60);
         List<Path> live = Segments.listLive(dir, NAME);

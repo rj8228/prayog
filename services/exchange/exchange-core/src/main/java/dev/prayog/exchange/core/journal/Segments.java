@@ -135,10 +135,26 @@ final class Segments {
         }
     }
 
+    // Allocates exactly the segment's size, read from the gzip trailer (ISIZE, the length mod 2^32; segments are under
+    // 2 GiB), so a 64 MiB segment costs 64 MiB of heap, not the doubling of readAllBytes.
     private static ByteBuffer gunzip(Path file) throws IOException {
-        try (InputStream in = new GZIPInputStream(Files.newInputStream(file), 64 * 1024)) {
-            return ByteBuffer.wrap(in.readAllBytes()).order(ByteOrder.LITTLE_ENDIAN);
+        int size;
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+            ByteBuffer trailer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+            channel.read(trailer, channel.size() - 4);
+            size = trailer.getInt(0);
         }
+        if (size < 0) {
+            throw new IOException("archived segment larger than 2 GiB or damaged: " + file);
+        }
+        byte[] bytes = new byte[size];
+        try (InputStream in = new GZIPInputStream(Files.newInputStream(file), 64 * 1024)) {
+            int read = in.readNBytes(bytes, 0, size);
+            if (read != size || in.read() != -1) {
+                throw new IOException("archived segment does not match its recorded size: " + file);
+            }
+        }
+        return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
     }
 
     static ByteBuffer header(long firstSeq) {
