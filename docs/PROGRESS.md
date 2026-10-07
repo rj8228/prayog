@@ -26,8 +26,8 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] S15 Kafka publisher (5 h) — ADR 0013
 - [x] S16 Post-trade service (7 h) — ADR 0015
 - [x] S17 Leaderboard (3 h) — ADR 0015
-- [ ] S18 Trading terminal (8 h) — first slice done (ADR 0010); Step 1.5 added the draggable workspace, watchlist, depth chart, positions & P&L, one-click trading, shortcuts and explain mode (ADR 0012); remaining: server-backed blotter and P&L with S16/S19
-- [ ] S19 Blotter, P&L and ops page (6 h)
+- [x] S18 Trading terminal (8 h) — ADRs 0010, 0012, 0017; server-backed blotter and P&L panels; checked in the browser 2026-10-07 (docs/media/02, 03)
+- [x] S19 Blotter, P&L and ops page (6 h) — ADR 0017; a full simulated day run from the ops page 2026-10-07 (docs/media/04-ops-run-a-day.png)
 
 ## Step 1.5 (2026-10-05)
 - [x] Docs site: MkDocs Material on GitHub Pages, link-checked (commits f5deacd, 02d89e5)
@@ -41,9 +41,32 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
 ## M4 Hardening layers
 - [x] S9 Benchmarks (4 h) — docs/benchmarks.md
-- [ ] S14 Realism checks (4 h)
+- [ ] S14 Realism checks (4 h) — statistics and live collector built and tested (b9914aa); remaining: run `tests/e2e/realism_report.py` for calm and volatile, save docs/realism.md, learnings file
 - [x] S20 Exchange rules as Cucumber scenarios (5 h) — ADR 0018
-- [ ] S21 Observability (4 h)
+- [x] S21 Observability (4 h) — ADR 0019; Grafana showed a live session and Kafka lag spikes 2026-10-07 (docs/media/05-grafana.png)
 - [x] S22 Docs and demo (5 h) — README, failure-modes.md, demo.md (recording: follow docs/demo.md)
 - [x] Multi-arch images — ADR 0021 (`make images`, CI job)
 - [x] Phase 2 items pulled into scope (agent rate-limit tier) — ADR 0020
+
+## Backlog (from the handoff, focus plan and ideas docs, 2026-10-07)
+
+MVP close-out
+- [ ] S14 report: run the realism report on the live stack, commit docs/realism.md and docs/learnings/S14
+- [ ] Learnings for S18 and S19 (ops page, blotter, server P&L), linked from docs/learnings/README.md
+- [ ] Record the demo video (docs/demo.md script; raw capture in docs/media/raw) and link it from the README
+- [ ] Full `make test` and `make e2e` on the repaired stack; update the Step 2 handoff doc
+- [ ] Investigate new-order p99 in Grafana: 445 ms, spikes to about 3.5 s, against about 100 ns per command in the engine (fsync, Docker on macOS?); record findings in docs/benchmarks.md
+
+Hardening
+- [ ] UI tests: component tests per panel and Playwright journeys (Playwright needs approval)
+- [ ] Journal segment archiving (10 clock ticks a second; segments grow forever)
+- [ ] Leaderboard: confirm simulated traders now show names (the 2026-10-07 screenshot shows hashed ids)
+
+Showcase (focus plan definition of done)
+- [ ] Host it so a stranger can use it, with a 2-minute demo video (hosting not decided)
+- [ ] JMH baseline, then GC tuning and lock-free changes, each with before and after numbers
+- [ ] Written design for 1 million users (shard by market, hot standby replaying the journal, market data fan-out with conflation and backpressure)
+- [ ] JEV-model bot (expected value, Kelly sizing) benchmarked against the traditional bots
+- [ ] Releases R0 to R3 tagged, ending with bot arena v1 (offline submissions, shared with Galois)
+- [ ] Interview companion entries for Prayog: pitch, numbers, failures, decisions
+
