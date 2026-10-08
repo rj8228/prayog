@@ -104,7 +104,7 @@ public class Leaderboard {
         String username = rawUsername.startsWith("service-account-")
                 ? rawUsername.substring("service-account-".length())
                 : rawUsername;
-        if (named.add(accountId)) {
+        if (!named.contains(accountId)) {
             db.insertInto(ACCOUNT_NAMES)
                     .set(ACCOUNT_NAMES.ACCOUNT_ID, accountId)
                     .set(ACCOUNT_NAMES.USERNAME, truncate(username, 64))
@@ -114,6 +114,9 @@ public class Leaderboard {
                     .set(ACCOUNT_NAMES.USERNAME, truncate(username, 64))
                     .set(ACCOUNT_NAMES.LABEL, truncate(label, 32))
                     .execute();
+            // Remembered only once written: a failed write (database restarting) is retried on the next request.
+            // Two requests racing here both upsert the same row, which is harmless.
+            named.add(accountId);
         }
     }
 

@@ -40,3 +40,6 @@ site/
 
 # Private interview notes (moved to a private repo later)
 interview/
+
+# Raw screen captures (edited videos go elsewhere)
+docs/media/raw/
