@@ -27,5 +27,6 @@ decision is tested.
 | 0020 | [Rate-limit tiers: people, users' bots, simulated traders](0020-rate-limit-tiers.md) | 2026-10-07 |
 | 0021 | [Multi-arch images](0021-multi-arch-images.md) | 2026-10-07 |
 | 0022 | [Journal archiving: gzip finished segments, keep every record](0022-journal-archiving.md) | 2026-10-08 |
+| 0023 | [A boxing-free order index; GC settings measured, not changed](0023-boxing-free-order-index.md) | 2026-10-08 |
 
 New ADRs go in this folder as `NNNN-short-title.md`; add a row here and an entry under **Decisions** in `mkdocs.yml`.

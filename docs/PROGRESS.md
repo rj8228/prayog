@@ -39,6 +39,7 @@ Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 - [x] Duplicate client order IDs rejected per account per trading day — ADR 0014
 - [x] Engine snapshots (recovery replays from the latest snapshot) — ADR 0016
 - [x] Journal archiving (gzip finished segments, readers see one history) — ADR 0022, 2026-10-08
+- [x] Boxing-free order index; GC settings measured — ADR 0023, 2026-10-08
 
 ## M4 Hardening layers
 - [x] S9 Benchmarks (4 h) — docs/benchmarks.md
@@ -57,19 +58,19 @@ MVP close-out
 - [x] Learnings for S18 and S19 (ops page, blotter, server P&L), linked from docs/learnings/README.md
 - [ ] Record the demo video (docs/demo.md script; raw capture in docs/media/raw) and link it from the README
 - [x] Full `make test` and `make e2e` on the repaired stack (2026-10-08)
-- [ ] Update the Step 2 handoff doc
+- [x] Update the Step 2 handoff doc — replaced by a Step 3 handoff in the private interview notes, 2026-10-08
 - [x] Investigate new-order p99 in Grafana: Serial GC pauses slowed about 6x (likely host memory pressure); steady-state p99 14 ms; ZGC worse in a 768 MiB container (docs/benchmarks.md, 2026-10-08)
 
 Hardening
 - [ ] UI tests: component tests per panel and Playwright journeys (Playwright needs approval) — deferred 2026-10-08
 - [x] Journal segment archiving — ADR 0022
-- [ ] Leaderboard: confirm simulated traders now show names (the 2026-10-07 screenshot shows hashed ids)
+- [x] Leaderboard: simulated traders show names (confirmed 2026-10-08); browser strategy accounts did not, fixed in 3e107ba
 
 Showcase (focus plan definition of done)
 - [ ] Host it so a stranger can use it, with a 2-minute demo video (hosting not decided)
-- [ ] JMH baseline, then GC tuning and lock-free changes, each with before and after numbers
-- [ ] Written design for 1 million users (shard by market, hot standby replaying the journal, market data fan-out with conflation and backpressure)
+- [x] JMH baseline, then GC tuning and lock-free changes, each with before and after numbers — ADR 0023, docs/benchmarks.md 2026-10-08 (allocation -12 to -21%; GC settings change pauses, not the laptop's tail; matching already lock-free)
+- [x] Written design for 1 million users (shard by market, hot standby replaying the journal, market data fan-out with conflation and backpressure) — in the private interview notes, 2026-10-08
 - [ ] JEV-model bot (TypeSafe AI's Jev decision API) against a random baseline — skipped 2026-10-08, needs an API key
 - [ ] Releases R0 to R3 tagged, ending with bot arena v1 (offline submissions, shared with Galois)
-- [ ] Interview companion entries for Prayog: pitch, numbers, failures, decisions
+- [x] Interview companion entries for Prayog: pitch, numbers, failures, decisions — in the private interview notes, 2026-10-08
 

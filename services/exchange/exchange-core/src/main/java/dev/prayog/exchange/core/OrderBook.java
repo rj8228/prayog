@@ -4,7 +4,6 @@ import dev.prayog.contracts.Side;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -23,7 +22,7 @@ public final class OrderBook {
     private final String symbol;
     private final NavigableMap<Long, PriceLevel> bids = new TreeMap<>(Collections.reverseOrder());
     private final NavigableMap<Long, PriceLevel> asks = new TreeMap<>();
-    private final Map<Long, RestingOrder> ordersById = new HashMap<>();
+    private final LongObjectMap<RestingOrder> ordersById = new LongObjectMap<>(1 << 10); // no boxing (benchmarks.md)
 
     OrderBook(String symbol) {
         this.symbol = symbol;
@@ -75,7 +74,8 @@ public final class OrderBook {
      * kill switch), never the per-order path.
      */
     List<RestingOrder> ordersInIdOrder() {
-        List<RestingOrder> orders = new ArrayList<>(ordersById.values());
+        List<RestingOrder> orders = new ArrayList<>(ordersById.size());
+        ordersById.forEachValue(orders::add);
         orders.sort(Comparator.comparingLong(o -> o.orderId));
         return orders;
     }

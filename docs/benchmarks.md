@@ -111,3 +111,103 @@ Reading:
   758/768 MiB, and allocation stalls (not counted as pauses) raised p99 5x. A concurrent collector needs headroom.
 - **Decision:** keep the default collector. If the tail matters again: give Docker more memory first, then compare G1
   and ZGC with a larger container (for example 1.5 GiB), measured the same way.
+
+## 2026-10-08 · GC settings and a boxing-free order index (ADR 0023)
+
+Machine: as above, Docker stack stopped (`make down`) so nothing else competes for the 8 GB. Two questions: which GC
+settings shorten the order path's tail on this host, and how much of the matching thread's allocation can go.
+
+### GC settings on the host
+
+`PipelineLatency 20000 20 BUSY_SPIN nojournal` (journal off so GC, not fsync, is what shows), run directly with
+`java --add-exports java.base/jdk.internal.misc=ALL-UNNAMED <flags> -Xlog:gc:file=gc.log -cp <bench classpath>
+dev.prayog.exchange.bench.PipelineLatency ...`. Three repeats of six settings, interleaved (one full round of all six,
+then the next).
+
+| Setting | GC pauses per run | Longest pause | p99 (3 runs) | p99.9 (3 runs) |
+|---|---|---|---|---|
+| G1, default heap | 11, 11, 11 | 25-26 ms | 0.02-0.67 ms | 7.2-11.9 ms |
+| G1, `-Xms512m -Xmx512m -XX:+AlwaysPreTouch` | 6, 6, 6 | 10.6-11.9 ms | 0.01-11.7 ms | 2.3-55.3 ms |
+| G1, 512 MiB, `-XX:MaxGCPauseMillis=5` | 9, 9, 9 | 12 ms | 0.01-0.02 ms | 4.4-13.7 ms |
+| Parallel, 512 MiB | 1, 1, 1 | 12-13 ms | 0.01-0.48 ms | 1.5-17.4 ms |
+| Serial, `-Xmx384m` (like the container) | 6, 6, 6 | 17-99 ms | 0.01-136 ms | 8.3-230 ms |
+| Generational ZGC, 512 MiB | 0 stop-the-world pauses | - | 0.01-8.0 ms | 1.9-26.6 ms |
+
+Reading:
+- **GC settings change the pauses reliably:** a fixed 512 MiB heap halves G1's pause count and longest pause; Parallel
+  collects once per run; ZGC has no stop-the-world pause.
+- **They do not reliably change the tail on this laptop.** p99.9 swings 10x between repeats of the same setting, and
+  ZGC with no pauses still reached 26.6 ms. With four busy-spinning threads on four performance cores, macOS
+  scheduling is now the larger source of the tail. A tuned server (isolated cores, no other apps) is needed to rank
+  collectors by tail; on this machine only the pause numbers are trustworthy.
+- **Serial in a small heap is the one clearly bad choice** (a 99 ms pause and p99.9 of 230 ms in one run), which agrees
+  with the Docker investigation above.
+- **Decision:** none for the container yet (see the entry above: memory first). For the host benchmarks, a fixed heap
+  with pre-touch makes pause behaviour repeatable.
+
+### Where the matching thread allocates (JFR)
+
+`MatchingEngineBenchmark` (place-and-cancel and aggressive fill, depth 10) with
+`-jvmArgsAppend "-XX:StartFlightRecording=filename=alloc.jfr,settings=profile"`, then
+`jfr print --json --events jdk.ObjectAllocationSample alloc.jfr`, grouped by class and first Prayog frame:
+
+| Share of bytes | What | Where |
+|---|---|---|
+| 23.1% | `HashMap$Node` | `OrderBook.add` (`ordersById.put`) |
+| 18.9% | `RestingOrder` | `MatchingEngine.newOrder` |
+| 15.5% | `OrderCancelled` | `MatchingEngine.cancelled` |
+| 10.9% | `OrderAccepted` | `MatchingEngine.newOrder` |
+| 8.3% | `HashMap$Node` | `ClientOrderIds.add` |
+| 7.4% + 2.3% + 1.6% | `Long` (boxing) | `OrderBook.remove`, `order`, `add` |
+| 3.8% | `SimpleImmutableEntry` | `OrderBook.bestLevel` (`TreeMap.firstEntry`) |
+
+The order index (`HashMap<Long, RestingOrder>`) is about a third of all bytes. Events and resting orders are the
+engine's output and state; the index is pure overhead. ADR 0023 replaces it with `LongObjectMap` (open addressing over
+a `long[]` and an `Object[]`, no boxing, no nodes).
+
+### Before and after: matching engine (JMH, `-prof gc`)
+
+Same settings as S9 (`-f 1 -wi 3 -w 2 -i 5 -r 2`), before and after run back to back with each version's classes
+first on the classpath.
+
+| Operation | depth | B/op before | B/op after | Change | ns/op before | ns/op after |
+|---|---|---|---|---|---|---|
+| Place passive, then cancel | 10 | 496 | 392 | -21% | 115 ± 14 | 134 ± 8 |
+| Place passive, then cancel | 1,000 | 497 | 392 | -21% | 193 ± 204 | 148 ± 3 |
+| Aggressive fill and refill | 10 | 656 | 576 | -12% | 189 ± 8 | 294 ± 261 |
+| Aggressive fill and refill | 1,000 | 657 | 577 | -12% | 208 ± 29 | 267 ± 32 |
+| Market sweep 3 levels (13 commands) | 10 | 4,799 | 4,158 | -13% | 1,883 ± 58 | 2,014 ± 225 |
+| Market sweep 3 levels (13 commands) | 1,000 | 4,802 | 4,162 | -13% | 1,905 ± 157 | 2,171 ± 273 |
+
+Speed, interleaved to cancel out drift (`-p depth=1000 -f 3 -wi 3 -w 1 -i 5 -r 1`, order after, before, after,
+before):
+
+| Operation | after #1 | before #1 | after #2 | before #2 |
+|---|---|---|---|---|
+| Place passive, then cancel | 148 ± 5 ns | 179 ± 39 ns | 178 ± 45 ns | 183 ± 32 ns |
+| Aggressive fill and refill | 213 ± 12 ns | 323 ± 81 ns | 287 ± 34 ns | 293 ± 82 ns |
+
+### Before and after: order path (G1 default, interleaved)
+
+`PipelineLatency 20000 20 BUSY_SPIN nojournal`, before and after alternated three times:
+
+| Run | GC pauses before / after | Longest pause before / after | p99.9 before / after |
+|---|---|---|---|
+| 1 | 11 / 11 | 44.4 / 28.3 ms | 40.1 / 33.5 ms |
+| 2 | 11 / 10 | 33.8 / 31.5 ms | 29.0 / 4.4 ms |
+| 3 | 11 / 11 | 32.3 / 31.2 ms | 5.4 / 4.4 ms |
+
+Reading:
+- **Allocation per operation fell 12-21%**, exactly by the index's share: the gain is deterministic (JMH's
+  `gc.alloc.rate.norm` has an error of under 1 B/op).
+- **Speed did not measurably change.** The sequential run suggested "after" was slower; the interleaved run shows "after"
+  equal or faster in every pair. The laptop's drift is larger than the effect.
+- **The order path's GC did not change** (10-11 pauses either way). In the pipeline the engine's index was a small part
+  of all allocation; JFR on `PipelineLatency` now shows the event records (`OrderAccepted` 17%, `Trade` 14%), the
+  benchmark's own commands (18%), client order ID strings (7%) and price-level churn (`PriceLevel`, `TreeMap$Entry`
+  and `Long`, about 12%). Removing those means flyweight events written straight into ring slots (SBE-style) and
+  pooled price levels: a redesign of the engine's output, not a small change.
+- **Lock-free:** matching was already lock-free (one writer thread, Disruptor sequences). The one lock near the
+  answer path is `MarketHub`'s monitor in the outbound stage, shared with snapshot readers on purpose (ADR 0009 #5).
+  It was not measured as a hotspot at this load; the lock-free replacement (sequenced snapshot plus buffered deltas) is
+  part of the scaling design rather than a change for today.
