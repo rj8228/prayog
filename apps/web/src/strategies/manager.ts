@@ -6,6 +6,7 @@ import { withToken } from '../auth/auth'
 import { startAccountFeed } from '../market/feed'
 import { levels } from '../market/marketSlice'
 import type { AppDispatch, RootState } from '../store'
+import { introduce } from './introduce'
 import { STRATEGIES } from './library'
 import type { RiskLimits } from './risk'
 import { Runner, type MarketView } from './runner'
@@ -96,6 +97,7 @@ export async function startStrategy(
   )
   // Leftovers from an earlier run of this account (a closed tab) are cancelled first.
   const leftover = await token().then((t) => accountCalls.cancelAll(t))
+  void introduce(account, token)
   const runner = new Runner(kind.create(params), symbol, limits, {
     api: accountCalls,
     token,

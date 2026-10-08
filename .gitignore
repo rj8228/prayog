@@ -37,3 +37,6 @@ site/
 
 # Browser-automation scratch output
 .playwright-mcp/
+
+# Private interview notes (moved to a private repo later)
+interview/
