@@ -22,6 +22,20 @@ order-latency tail investigation; allocation and GC work (ADR 0023); leaderboard
 6. **Hosting:** decide where; done when a stranger can open the market without installing anything.
 7. **Bot arena v1** (offline submissions, shared with Galois) as release R3.
 
+8. **License:** the public repo has no `LICENSE` file, which legally means "all rights reserved". Pick one (MIT is
+   common for showcase projects); done when `LICENSE` is in the repo and GitHub shows it.
+9. **GitHub repo page:** set the homepage to https://rj8228.github.io/prayog/ and add topics (for example
+   `matching-engine`, `lmax-disruptor`, `kafka`, `event-sourcing`, `java`, `spring-boot`).
+10. **MVP definition of done, demo part:** BUILD_PLAN section 11 and S22 ask for a *recorded* demo. S22 is ticked for the
+    script; the MVP is formally complete only when item 3 is done.
+11. **Keycloak integration test:** the testing strategy (BUILD_PLAN section 12) lists Testcontainers for Keycloak;
+    tokens are covered by the live stack (`make smoke`, `make e2e`) but no Testcontainers test starts Keycloak. Decide:
+    add one, or record why the e2e coverage is enough (ADR).
+12. **Public scaling write-up (optional):** the 1-million-user design is in the private interview notes; a short public
+    version in `docs/` would show it to readers of the repo.
+13. **Stale planning docs (optional):** the Claude Docs "Prayog Step 2 Handoff" (2026-10-04) and the build-plan
+    artifact predate this state; mark them superseded so they don't mislead later.
+
 Parked: JEV-model bot (needs an API key).
 
 ## M0 Setup
