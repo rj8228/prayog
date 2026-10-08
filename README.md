@@ -10,7 +10,9 @@ It runs on one machine with `make up`:
 - a Kafka event stream into a post-trade ledger with P&L and a leaderboard;
 - an ops page to run a whole simulated day, and Grafana dashboards.
 
-Progress: [docs/PROGRESS.md](docs/PROGRESS.md).
+![The trading workspace: order book, depth chart, positions and P&L](docs/media/02-trading-workspace.png)
+
+Progress: [docs/PROGRESS.md](docs/PROGRESS.md). Docs site: https://rj8228.github.io/prayog/
 
 - **Visit and trade:** [docs/guides/using-the-market.md](docs/guides/using-the-market.md)
 - **Build a trading bot:** [docs/bots/](docs/bots/README.md)
@@ -74,6 +76,33 @@ flowchart LR
 - Restarts start from a verified snapshot.
 - A rule change is a journaled command, so history replays under the rules it was made with.
 - P&L reconciles exactly with the trade log.
+
+## In numbers
+
+Measured on an Apple M1 laptop; every number has its command, machine and date in
+[docs/benchmarks.md](docs/benchmarks.md).
+
+| What | Number |
+|---|---|
+| Matching, one thread | about 60-120 ns per command |
+| Order path with journal and fsync | 20,000 commands/s held; median about 12 ms (the SSD's fsync) |
+| Order path without the disk | 0.5 µs median (busy-spin) |
+| Live stack, steady state | p50 2.8 ms, p99 14 ms, p99.9 25 ms |
+| Journal archiving | 2.6-4.8x smaller |
+| Boxing-free order index | 12-21% less allocation per operation |
+
+## Status
+
+The MVP is complete: sessions S1-S22, the admin console, workspace and browser strategies, duplicate client order
+IDs, snapshots, journal archiving and allocation work. 23 decisions are recorded in [docs/adr/](docs/adr/index.md),
+and [docs/failure-modes.md](docs/failure-modes.md) maps each failure to the test that proves recovery.
+
+Still open (details in [docs/PROGRESS.md](docs/PROGRESS.md)):
+- volatility clustering in the simulated traders ([realism report](docs/realism.md));
+- a recorded 2-minute demo video;
+- UI component tests and Playwright journeys;
+- public hosting;
+- tagged releases, ending with the bot arena.
 
 ## Prerequisites
 

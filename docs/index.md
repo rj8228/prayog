@@ -41,7 +41,7 @@ browser or with their own bots, against a real matching engine with a journal an
 
 ## How it fits together
 
-Click any box to read the page that explains it. Dashed parts are planned (Step 2).
+Click any box to read the page that explains it.
 
 <!-- Links in the SVG use xlink:href: Material's instant navigation rewrites every [href] element and fails on SVG links. -->
 <figure class="arch" markdown="0">
@@ -143,23 +143,24 @@ Click any box to read the page that explains it. Dashed parts are planned (Step 
     <text class="arch-sub" x="396" y="589">same bytes out</text></a>
   <path class="arch-edge arch-dashed" d="M396 548 V512"/>
 
-  <!-- Step 2 -->
-  <rect class="arch-group arch-dashed" x="8" y="676" width="504" height="106" rx="14"/>
-  <text class="arch-group-title" x="500" y="698" text-anchor="end">Step 2 · planned</text>
-  <path class="arch-edge arch-dashed" d="M60 600 V710" marker-end="url(#arch-arrow)"/>
-  <text class="arch-note" x="66" y="664" style="text-anchor: start">trades</text>
+  <!-- After the trade -->
+  <rect class="arch-group" x="8" y="676" width="504" height="106" rx="14"/>
+  <a xlink:href="adr/0015-post-trade-ledger-and-leaderboard/"><title>ADR 0015: post-trade ledger and leaderboard</title>
+    <text class="arch-group-title" x="500" y="698" text-anchor="end">After the trade · post-trade service ↗</text></a>
+  <path class="arch-edge" d="M60 600 V710" marker-end="url(#arch-arrow)"/>
+  <text class="arch-note" x="66" y="664" style="text-anchor: start">journaled events</text>
   <a xlink:href="overview/kafka.html"><title>Kafka (interactive)</title>
-    <rect class="arch-node arch-planned" x="24" y="712" width="148" height="56" rx="10"/>
+    <rect class="arch-node" x="24" y="712" width="148" height="56" rx="10"/>
     <text class="arch-title" x="98" y="736">Kafka</text>
-    <text class="arch-sub" x="98" y="755">durable trade log</text></a>
+    <text class="arch-sub" x="98" y="755">event stream</text></a>
   <a xlink:href="learnings/S02-local-infrastructure/"><title>S2: local infrastructure</title>
-    <rect class="arch-node arch-planned" x="186" y="712" width="148" height="56" rx="10"/>
+    <rect class="arch-node" x="186" y="712" width="148" height="56" rx="10"/>
     <text class="arch-title" x="260" y="736">PostgreSQL</text>
-    <text class="arch-sub" x="260" y="755">post-trade, P&amp;L</text></a>
+    <text class="arch-sub" x="260" y="755">ledger, P&amp;L</text></a>
   <a xlink:href="runbook/05-data-and-messaging/"><title>Runbook: data and messaging</title>
-    <rect class="arch-node arch-planned" x="348" y="712" width="148" height="56" rx="10"/>
+    <rect class="arch-node" x="348" y="712" width="148" height="56" rx="10"/>
     <text class="arch-title" x="422" y="736">Redis</text>
-    <text class="arch-sub" x="422" y="755">leaderboard, cache</text></a>
+    <text class="arch-sub" x="422" y="755">leaderboard</text></a>
 </svg>
 </figure>
 
@@ -235,6 +236,67 @@ where one exists, an interactive page with a simulator.
     [:material-play-circle-outline: Market making](overview/market-making.html) ·
     [:material-play-circle-outline: Technical overview](overview/technical.html)
 
+-   **9 · Step 1.5 Admin, workspace, strategies**
+
+    Admin console, draggable workspace, six browser strategies with risk limits.
+
+    [:material-notebook-outline: Notes](learnings/step-1.5-admin-workspace-strategies.md) ·
+    [:material-scale-balance: ADR 0012](adr/0012-trading-workspace-and-strategies.md)
+
+-   **10 · S15 Kafka publisher**
+
+    Outbox pattern: tail the durable log, checkpoint, at-least-once.
+
+    [:material-notebook-outline: Notes](learnings/S15-kafka-publisher.md) ·
+    [:material-play-circle-outline: Kafka](overview/kafka.html) ·
+    [:material-scale-balance: ADR 0013](adr/0013-kafka-event-publisher.md)
+
+-   **11 · S16–S17 Post-trade and leaderboard**
+
+    Idempotent consumer, average-cost P&L, zero-sum checks, Redis sorted sets.
+
+    [:material-notebook-outline: Notes](learnings/S16-S17-post-trade-and-leaderboard.md) ·
+    [:material-scale-balance: ADR 0015](adr/0015-post-trade-ledger-and-leaderboard.md)
+
+-   **12 · S18–S19 Terminal, blotter, ops page**
+
+    Server-backed panels, official P&L, a whole simulated day from the browser.
+
+    [:material-notebook-outline: Notes](learnings/S18-S19-terminal-blotter-ops.md) ·
+    [:material-scale-balance: ADR 0017](adr/0017-ops-page-and-server-backed-panels.md)
+
+-   **13 · Step 2 Recovery hardening**
+
+    Duplicate client order IDs, rule versions, snapshots, journal archiving.
+
+    [:material-notebook-outline: IDs](learnings/step-2-duplicate-client-order-ids.md) ·
+    [:material-notebook-outline: Snapshots](learnings/step-2-engine-snapshots.md) ·
+    [:material-notebook-outline: Archiving](learnings/step-2-journal-archiving.md)
+
+-   **14 · S9 Benchmarks, allocation and GC**
+
+    JMH, HdrHistogram, coordinated omission, JFR, GC settings, a boxing-free index.
+
+    [:material-notebook-outline: S9](learnings/S09-benchmarks.md) ·
+    [:material-notebook-outline: Allocation](learnings/step-3-allocation-and-gc.md) ·
+    [:material-speedometer: Numbers](benchmarks.md)
+
+-   **15 · S14 Realism checks**
+
+    Do simulated prices look like a real market? Spreads, tails, clustering.
+
+    [:material-notebook-outline: Notes](learnings/S14-realism.md) ·
+    [:material-chart-line: Report](realism.md)
+
+-   **16 · S20–S22 Rules, observability, docs**
+
+    Cucumber scenarios, Prometheus and Grafana, failure modes, the demo.
+
+    [:material-notebook-outline: S20](learnings/S20-rules-as-scenarios.md) ·
+    [:material-notebook-outline: S21](learnings/S21-observability.md) ·
+    [:material-notebook-outline: S22](learnings/S22-docs-and-demo.md) ·
+    [:material-alert-outline: Failure modes](failure-modes.md)
+
 </div>
 
 Background: [industry context](learnings/industry-context.md) (exchange vs trading firm, what production engines do
@@ -247,17 +309,18 @@ pnpm 10 (`corepack`).
 
 ```sh
 make env    # once: creates .env with random local secrets (git-ignored)
-make up     # builds and starts everything (exchange, traders, web, PostgreSQL, Kafka, Redis, Keycloak, Traefik)
+make up     # builds and starts everything; add PROFILES="infra app obs" for Prometheus and Grafana
 make smoke  # quick checks
-make e2e    # checks the live market is correct: feeds, liquidity, a bot round trip, journal replay
+make e2e    # the live market is correct: feeds, liquidity, bots, Kafka outage, post-trade, journal replay
 make down   # stops it (data is kept); `make reset` also deletes the data volumes
 make test   # build and test everything
 ```
 
 | Address | What |
 |---|---|
-| http://app.prayog.localhost | The live market: watch without signing in; sign in as `trader1` to trade |
-| http://api.prayog.localhost | The exchange API for bots ([reference](bots/api.md)) |
+| http://app.prayog.localhost | The live market: watch without signing in; sign in as `trader1` to trade, `ops1` for the ops page |
+| http://api.prayog.localhost | The exchange and post-trade API for bots ([reference](bots/api.md)) |
+| http://grafana.prayog.localhost | Dashboards (profile `obs`) |
 | http://auth.prayog.localhost | Keycloak; admin console at `/admin` (credentials in `.env`) |
 | http://traefik.prayog.localhost/dashboard/ | Traefik routes |
 

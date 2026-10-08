@@ -2,6 +2,28 @@
 
 Session definitions: docs/BUILD_PLAN.md section 10. Milestones: section 16.4.
 
+## Summary (2026-10-08)
+
+**Done:** every MVP session (S1-S22) and milestone (M0-M4); Step 1.5 (docs site, admin console, workspace, browser
+strategies); Step 2 hardening (duplicate client order IDs, snapshots, journal archiving); the S14 realism report; the
+order-latency tail investigation; allocation and GC work (ADR 0023); leaderboard names for every kind of account.
+23 ADRs, full `make test` and `make e2e` green, docs site link-checked.
+
+**Remaining to call Prayog finished**, in suggested order (each "done when" is the acceptance check):
+
+1. **Browser check of strategy names:** start a browser strategy; done when its `user/algo-...` row shows on the
+   leaderboard.
+2. **Volatility clustering:** time-varying sigma or self-exciting jumps in the simulated traders; done when a longer
+   realism run shows positive autocorrelation of absolute returns in `docs/realism.md`.
+3. **Demo video:** 2 minutes, following `docs/demo.md`; done when linked from the README.
+4. **UI tests:** component tests per panel, then Playwright journeys (Playwright needs approval); done when CI runs
+   them.
+5. **Releases:** tag R0 (MVP) now; R1 after items 2-4; done when GitHub releases exist with notes.
+6. **Hosting:** decide where; done when a stranger can open the market without installing anything.
+7. **Bot arena v1** (offline submissions, shared with Galois) as release R3.
+
+Parked: JEV-model bot (needs an API key).
+
 ## M0 Setup
 - [x] Tool installs (Docker Desktop, maven, uv, gh, pnpm, Python 3.12)
 - [x] Git init and GitHub repo (public: github.com/rj8228/prayog)
